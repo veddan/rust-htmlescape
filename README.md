@@ -1,6 +1,6 @@
-# A HTML entitiy encoding library for Rust
+# A HTML entity encoding library for Rust
 ## Example usage
-All example presume a `use htmlescape::*;`.
+All example assume a `use htmlescape::*;` is present.
 
 ```
 let title = "Cats > dogs";
