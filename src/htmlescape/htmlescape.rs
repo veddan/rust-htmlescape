@@ -6,7 +6,7 @@ use std::str;
 use std::u32;
 
 static named_entities: &'static[(&'static str, char)] = &'static [
-("AElig", '\u00C6'),
+  ("AElig", '\u00C6'),
   ("Aacute", '\u00C1'),
   ("Acirc", '\u00C2'),
   ("Agrave", '\u00C0'),
@@ -441,18 +441,6 @@ macro_rules! try_parse(
     }
     );
   )
-
-trait Clear {
-  fn clear(&mut self);
-}
-
-impl Clear for ~str {
-  fn clear(&mut self) {
-    unsafe {
-      str::raw::set_len(self, 0);
-    }
-  }
-}
 
  /** Decodes an entity-encoded string.
   * 
