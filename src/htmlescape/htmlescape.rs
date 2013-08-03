@@ -541,53 +541,59 @@ mod test {
   use htmlescape::*;
   use std::rand::*;
 
+  macro_rules! assert_typed_eq (($T: ty, $given: expr, $expected: expr) => ({
+    let given_val: &$T = $given;
+    let expected_val: &$T = $expected;
+    assert_eq!(given_val, expected_val);
+  }))
+
   #[test]
   fn test_encode_minimal() {
     let data = [
       // (input, expected_output)
-      ("", ~""),
-      ("Håll älgen, Örjan!", ~"Håll älgen, Örjan!"),
-      ("<p>hej!</p>", ~"&lt;p&gt;hej!&lt;/p&gt;"),
-      ("bread & butter", ~"bread &amp; butter"),
-      ("\"bread\" & butter", ~"&quot;bread&quot; &amp; butter"),
-      ("< less than", ~"&lt; less than"),
-      ("greater than >", ~"greater than &gt;"),
+      ("", ""),
+      ("Håll älgen, Örjan!", "Håll älgen, Örjan!"),
+      ("<p>hej!</p>", "&lt;p&gt;hej!&lt;/p&gt;"),
+      ("bread & butter", "bread &amp; butter"),
+      ("\"bread\" & butter", "&quot;bread&quot; &amp; butter"),
+      ("< less than", "&lt; less than"),
+      ("greater than >", "greater than &gt;"),
       ];
 
     for data.iter().advance |&(input, expected)| {
       let actual = encode_minimal(input);
-      assert_eq!(expected, actual);
+      assert_typed_eq!(str, actual, expected);
     }
   }
 
   #[test]
   fn test_encode_attribute() {
     let data = [
-      ("", ~""),
-      ("0 3px", ~"0&#x20;3px"),
-      ("<img \"\"\">", ~"&lt;img&#x20;&quot;&quot;&quot;&gt;"),
-      ("hej; hå", ~"hej&#x3B;&#x20;hå"),
+      ("", ""),
+      ("0 3px", "0&#x20;3px"),
+      ("<img \"\"\">", "&lt;img&#x20;&quot;&quot;&quot;&gt;"),
+      ("hej; hå", "hej&#x3B;&#x20;hå"),
       ];
     for data.iter().advance |&(input, expected)| {
       let actual = encode_attribute(input);
-      assert_eq!(expected, actual);
+      assert_typed_eq!(str, actual, expected);
     }
   }
 
   #[test]
   fn test_decode() {
     let data = [
-      ("", ~""),
-      ("Håll älgen, Örjan!", ~"Håll älgen, Örjan!"),
-      ("&lt;p&gt;hej!&lt;/p&gt;", ~"<p>hej!</p>"),
-      ("hej&#x3B;&#x20;hå", ~"hej; hå"),
-      ("&quot;width&#x3A;&#32;3px&#59;&quot;", ~"\"width: 3px;\""),
-      ("&#x2b;", ~"+"),
+      ("", ""),
+      ("Håll älgen, Örjan!", "Håll älgen, Örjan!"),
+      ("&lt;p&gt;hej!&lt;/p&gt;", "<p>hej!</p>"),
+      ("hej&#x3B;&#x20;hå", "hej; hå"),
+      ("&quot;width&#x3A;&#32;3px&#59;&quot;", "\"width: 3px;\""),
+      ("&#x2b;", "+"),
       ];
     for data.iter().advance |&(input, expected)| {
       match decode_html(input) {
-        Ok(actual) => assert_eq!(expected, actual),
-          Err(reason) => fail!("Failed at \"%s\", reason \"%s\"", input, reason)
+        Ok(actual) => assert_typed_eq!(str, expected, actual),
+        Err(reason) => fail!("Failed at \"%s\", reason \"%s\"", input, reason)
       }
     }
   }
@@ -615,7 +621,7 @@ mod test {
   #[test]
   fn random_roundtrip() {
     let mut rng = IsaacRng::new_seeded(&[1, 2, 3, 4]);
-    for 100.times {
+    do 100.times {
       let original = random_str(&mut rng);
       let encoded = encode_attribute(original);
       match decode_html(encoded) {
@@ -629,7 +635,7 @@ mod test {
   fn random_str(rng: &mut IsaacRng) -> ~str {
     let len = rng.gen_uint_range(0, 40);
     let mut s = ~"";
-    for len.times {
+    do len.times {
       let c = rng.gen_uint_range(1, 512) as char;
       s.push_char(c);
     }
