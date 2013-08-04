@@ -330,7 +330,7 @@ pub fn encode_minimal(s: &str) -> ~str {
  * - `writer` - Output is written to here.
  */
 pub fn encode_minimal_w<T: Writer>(s: &str, writer: &T) {
-  for s.iter().advance |c| {
+  for c in s.iter() {
     match get_entity(c) {
       None => writer.write_char(c),
            Some(entity) => writer.write_str(entity)
@@ -386,7 +386,7 @@ pub fn encode_attribute(s: &str) -> ~str {
  * - `writer` - Output is written to here.
  */
 pub fn encode_attribute_w<T: Writer>(s: &str, writer: &T) {
-  for s.iter().advance |c| {
+  for c in s.iter() {
     match get_entity(c) {
       Some(entity) => writer.write_str(entity),
         None => 
@@ -460,7 +460,9 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
   let mut pos = 0;
   let mut buf = ~"";
   buf.reserve_at_least(8);
-  for reader.each_char |c| {
+  loop {
+    let c = reader.read_char();
+    if c == -1 as char { break; }
     match state {
       Normal if c == '&' => state = Entity,
              Normal => writer.write_char(c),
@@ -560,7 +562,7 @@ mod test {
       ("greater than >", "greater than &gt;"),
       ];
 
-    for data.iter().advance |&(input, expected)| {
+    for &(input, expected) in data.iter() {
       let actual = encode_minimal(input);
       assert_typed_eq!(str, actual, expected);
     }
@@ -574,7 +576,7 @@ mod test {
       ("<img \"\"\">", "&lt;img&#x20;&quot;&quot;&quot;&gt;"),
       ("hej; hå", "hej&#x3B;&#x20;hå"),
       ];
-    for data.iter().advance |&(input, expected)| {
+    for &(input, expected) in data.iter() {
       let actual = encode_attribute(input);
       assert_typed_eq!(str, actual, expected);
     }
@@ -590,7 +592,7 @@ mod test {
       ("&quot;width&#x3A;&#32;3px&#59;&quot;", "\"width: 3px;\""),
       ("&#x2b;", "+"),
       ];
-    for data.iter().advance |&(input, expected)| {
+    for &(input, expected) in data.iter() {
       match decode_html(input) {
         Ok(actual) => assert_typed_eq!(str, expected, actual),
         Err(reason) => fail!("Failed at \"%s\", reason \"%s\"", input, reason)
@@ -610,7 +612,7 @@ mod test {
       "&#;",
       "&#x",
       ];
-    for data.iter().advance |&input| {
+    for &input in data.iter() {
       match decode_html(input) {
         Err(_) => (),
           Ok(res) => fail!("Failed at \"%s\", expected error, got \"%s\"", input, res)
