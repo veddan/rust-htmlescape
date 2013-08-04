@@ -258,25 +258,25 @@ static named_entities: &'static[(&'static str, char)] = &'static [
   ("zeta", '\u03B6'),
   ("zwj", '\u200D'),
   ("zwnj", '\u200C'),
-  ];
+];
 
 static minimal_entities: [(char, &'static str), ..5] = [
-('"', "&quot;"),
+  ('"', "&quot;"),
   ('&', "&amp;"),
   ('\'', "&#x27;"),
   ('<', "&lt;"),
   ('>', "&gt;")
-  ];
+];
 
-  fn get_entity(c: char) -> Option<&'static str> {
-    match minimal_entities.bsearch(|&(ec, _)| { ec.cmp(&c) }) {
-      None => None,
-           Some(idx) => {
-             let (_, e) = minimal_entities[idx];
-             Some(e)
-           }
+fn get_entity(c: char) -> Option<&'static str> {
+  match minimal_entities.bsearch(|&(ec, _)| { ec.cmp(&c) }) {
+    None => None,
+    Some(idx) => {
+      let (_, e) = minimal_entities[idx];
+      Some(e)
     }
   }
+}
 
 /**
  * HTML entity-encode a string.
@@ -333,7 +333,7 @@ pub fn encode_minimal_w<T: Writer>(s: &str, writer: &T) {
   for c in s.iter() {
     match get_entity(c) {
       None => writer.write_char(c),
-           Some(entity) => writer.write_str(entity)
+      Some(entity) => writer.write_str(entity)
     };
   }
 }
@@ -389,12 +389,12 @@ pub fn encode_attribute_w<T: Writer>(s: &str, writer: &T) {
   for c in s.iter() {
     match get_entity(c) {
       Some(entity) => writer.write_str(entity),
-        None => 
-          if (c as uint) < 256 && !c.is_alphanumeric() {
-            write_hex(c, writer);
-          } else {
-            writer.write_char(c);
-          }
+      None => 
+        if (c as uint) < 256 && !c.is_alphanumeric() {
+          write_hex(c, writer);
+        } else {
+          writer.write_char(c);
+        }
     }
   }
 }
@@ -429,32 +429,31 @@ fn decode_hex(hex: &str) -> Result<char, ~str> {
 fn decode_dec(dec: &str) -> Result<char, ~str> {
   match u32::from_str_radix(dec, 10) {
     Some(c) => Ok(c as char),
-      None => Err(fmt!("invalid decimal escape \"%s\"", dec))
+    None => Err(fmt!("invalid decimal escape \"%s\"", dec))
   }
 }
 
 macro_rules! try_parse(
   ($parse:expr $pos:ident) => (
     match $parse {
-    Err(reason) => return Err(fmt!("at %d: %s", $pos, reason)),
-    Ok(res) => res
+      Err(reason) => return Err(fmt!("at %d: %s", $pos, reason)),
+      Ok(res) => res
     }
-    );
-  )
+  );)
 
- /** Decodes an entity-encoded string.
-  * 
-  * Similar to `decode_html`, except reading from a `Reader` rather than a string, and
-  * writing to a writer rather than returning a `~str`.
-  *
-  * # Arguments
-  * - `reader` - Encoded data is read from here.
-  * - `writer` - Decoded data is written to here.
-  *
-  * # Return value
-  * On success `Ok(())` is returned. On error, `Err(reason)` is returned, with `reason`
-  * containing a description of the error.
-  */
+/** Decodes an entity-encoded string.
+ * 
+ * Similar to `decode_html`, except reading from a `Reader` rather than a string, and
+ * writing to a writer rather than returning a `~str`.
+ *
+ * # Arguments
+ * - `reader` - Encoded data is read from here.
+ * - `writer` - Decoded data is written to here.
+ *
+ * # Return value
+ * On success `Ok(())` is returned. On error, `Err(reason)` is returned, with `reason`
+ * containing a description of the error.
+ */
 pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<(), ~str>{
   let mut state: DecodeState = Normal;
   let mut pos = 0;
@@ -465,12 +464,12 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
     if c == -1 as char { break; }
     match state {
       Normal if c == '&' => state = Entity,
-             Normal => writer.write_char(c),
-             Entity if c == '#' => state = Numeric,
-             Entity => {
-               state = Named;
-               buf.push_char(c);
-             }
+      Normal => writer.write_char(c),
+      Entity if c == '#' => state = Numeric,
+      Entity => {
+        state = Named;
+        buf.push_char(c);
+      }
       Named if c == ';' => {
         state = Normal;
         let ch = try_parse!(decode_named_entity(buf) pos);
@@ -478,17 +477,17 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
         buf.clear();
       }
       Named => buf.push_char(c),
-            Numeric if c.is_digit() => {
-              state = Dec;
-              buf.push_char(c);
-            }
+      Numeric if c.is_digit() => {
+        state = Dec;
+        buf.push_char(c);
+      }
       Numeric if c == 'x' => state = Hex,
-              Dec if c == ';' => {
-                state = Normal;
-                let ch = try_parse!(decode_dec(buf) pos);
-                writer.write_char(ch);
-                buf.clear();
-              }
+      Dec if c == ';' => {
+        state = Normal;
+        let ch = try_parse!(decode_dec(buf) pos);
+        writer.write_char(ch);
+        buf.clear();
+      }
       Hex if c == ';' => {
         state = Normal;
         let ch = try_parse!(decode_hex(buf) pos);
@@ -534,7 +533,7 @@ pub fn decode_html(s: &str) -> Result<~str, ~str> {
   };
   match res {
     Ok(_) => Ok(str::from_bytes(*writer.bytes)),
-      Err(err) => Err(err)
+    Err(err) => Err(err)
   }
 }
 
@@ -615,7 +614,7 @@ mod test {
     for &input in data.iter() {
       match decode_html(input) {
         Err(_) => (),
-          Ok(res) => fail!("Failed at \"%s\", expected error, got \"%s\"", input, res)
+        Ok(res) => fail!("Failed at \"%s\", expected error, got \"%s\"", input, res)
       }
     }
   }
@@ -628,7 +627,7 @@ mod test {
       let encoded = encode_attribute(original);
       match decode_html(encoded) {
         Err(reason) => fail!("error at \"%s\", reason: %s", original, reason),
-          Ok(decoded) => assert_eq!(original, decoded)
+        Ok(decoded) => assert_eq!(original, decoded)
       };
     }
   }
