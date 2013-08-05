@@ -303,7 +303,7 @@ fn get_entity(c: char) -> Option<&'static str> {
  *
  * # Safety notes
  * Using the function to encode an untrusted string that is to be used as a HTML attribute value
- * may lead to XSS vurnabilities. Consider the following example:
+ * may lead to XSS vulnerabilities. Consider the following example:
  *
  * ~~~
  * let name = "dummy onmouseover=alert(/XSS/)";  // User input
@@ -512,7 +512,7 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
  *
  * Decodes an entity encoded string, replacing HTML entities (`&amp;`, `&#20;` ...) with the
  * the corresponding character. Case matters for named entities, ie. `&Amp;` is invalid.
- * Case does not matter for hex entities, so `&#x2E;` and `&#x2e;` are treadted the same.
+ * Case does not matter for hex entities, so `&#x2E;` and `&#x2e;` are treated the same.
  * 
  * # Arguments
  * - `s` - Entity-encoded string to decode.
