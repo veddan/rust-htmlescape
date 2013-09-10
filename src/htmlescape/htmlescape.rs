@@ -1,9 +1,8 @@
-use std::io::BytesWriter;
-use std::io::WriterUtil;
-use std::io::ReaderUtil;
-use std::io::*;
+use std::io::{BytesWriter, WriterUtil, ReaderUtil, with_str_reader};
 use std::str;
 use std::u32;
+use std::char;
+use std::cast;
 
 static named_entities: &'static[(&'static str, char)] = &'static [
   ("AElig", '\u00C6'),
@@ -316,7 +315,7 @@ fn get_entity(c: char) -> Option<&'static str> {
 pub fn encode_minimal(s: &str) -> ~str {
   let writer = BytesWriter::new();
   encode_minimal_w(s, &writer);
-  return str::from_bytes(*writer.bytes);
+  return str::from_utf8(*writer.bytes);
 }
 
 /**
@@ -372,7 +371,7 @@ fn write_hex<W: Writer>(c: char, writer: &W) {
 pub fn encode_attribute(s: &str) -> ~str {
   let writer = BytesWriter::new();
   encode_attribute_w(s, &writer);
-  return str::from_bytes(*writer.bytes);
+  return str::from_utf8(*writer.bytes);
 }
 
 /**
@@ -419,17 +418,13 @@ fn decode_named_entity(entity: &str) -> Result<char, ~str> {
   }
 }
 
-fn decode_hex(hex: &str) -> Result<char, ~str> {
-  match u32::from_str_radix(hex, 16) {
-    Some(c) => Ok(c as char),
-    None => Err(fmt!("invalid hex escape \"%s\"", hex))
-  }
-}
-
-fn decode_dec(dec: &str) -> Result<char, ~str> {
-  match u32::from_str_radix(dec, 10) {
-    Some(c) => Ok(c as char),
-    None => Err(fmt!("invalid decimal escape \"%s\"", dec))
+fn decode_numeric(esc: &str, radix: uint) -> Result<char, ~str> {
+  match u32::from_str_radix(esc, radix) {
+    Some(n) => match char::from_u32(n) {
+      Some(c) => Ok(c),
+      None => Err(fmt!("invalid character %u in \"%s\"", n as uint, esc))
+    },
+    None => Err(fmt!("invalid escape \"%s\"", esc))
   }
 }
 
@@ -461,7 +456,8 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
   buf.reserve_at_least(8);
   loop {
     let c = reader.read_char();
-    if c == -1 as char { break; }
+    // Not nice, but read char doesn't yet reflect changes in how chars are treated in Rust
+    unsafe { if c == cast::transmute(-1u32) { break; } }
     match state {
       Normal if c == '&' => state = Entity,
       Normal => writer.write_char(c),
@@ -484,13 +480,13 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
       Numeric if c == 'x' => state = Hex,
       Dec if c == ';' => {
         state = Normal;
-        let ch = try_parse!(decode_dec(buf) pos);
+        let ch = try_parse!(decode_numeric(buf, 10) pos);
         writer.write_char(ch);
         buf.clear();
       }
       Hex if c == ';' => {
         state = Normal;
-        let ch = try_parse!(decode_hex(buf) pos);
+        let ch = try_parse!(decode_numeric(buf, 16) pos);
         writer.write_char(ch);
         buf.clear();
       }
@@ -532,15 +528,19 @@ pub fn decode_html(s: &str) -> Result<~str, ~str> {
     decode_html_rw(&reader, &writer)
   };
   match res {
-    Ok(_) => Ok(str::from_bytes(*writer.bytes)),
+    Ok(_) => Ok(str::from_utf8(*writer.bytes)),
     Err(err) => Err(err)
   }
 }
 
 #[cfg(test)]
 mod test {
-  use htmlescape::*;
+  extern mod extra;
+
   use std::rand::*;
+  use std::char;
+
+  use htmlescape::*;
 
   macro_rules! assert_typed_eq (($T: ty, $given: expr, $expected: expr) => ({
     let given_val: &$T = $given;
@@ -637,7 +637,7 @@ mod test {
     let len = rng.gen_uint_range(0, 40);
     let mut s = ~"";
     do len.times {
-      let c = rng.gen_uint_range(1, 512) as char;
+      let c = char::from_u32(rng.gen_uint_range(1, 512) as u32).unwrap();
       s.push_char(c);
     }
     return s;
