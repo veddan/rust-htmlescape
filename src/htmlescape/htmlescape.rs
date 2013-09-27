@@ -1,8 +1,5 @@
 use std::io::{BytesWriter, WriterUtil, ReaderUtil, with_str_reader};
-use std::str;
-use std::u32;
-use std::char;
-use std::cast;
+use std::{str, num, char, cast};
 
 static named_entities: &'static[(&'static str, char)] = &'static [
   ("AElig", '\u00C6'),
@@ -419,7 +416,7 @@ fn decode_named_entity(entity: &str) -> Result<char, ~str> {
 }
 
 fn decode_numeric(esc: &str, radix: uint) -> Result<char, ~str> {
-  match u32::from_str_radix(esc, radix) {
+  match num::from_str_radix::<u32>(esc, radix) {
     Some(n) => match char::from_u32(n) {
       Some(c) => Ok(c),
       None => Err(fmt!("invalid character %u in \"%s\"", n as uint, esc))
@@ -537,7 +534,7 @@ pub fn decode_html(s: &str) -> Result<~str, ~str> {
 mod test {
   extern mod extra;
 
-  use std::rand::*;
+  use std::rand;
   use std::char;
 
   use htmlescape::*;
@@ -621,7 +618,7 @@ mod test {
 
   #[test]
   fn random_roundtrip() {
-    let mut rng = IsaacRng::new_seeded(&[1, 2, 3, 4]);
+    let mut rng = rand::rng();
     do 100.times {
       let original = random_str(&mut rng);
       let encoded = encode_attribute(original);
@@ -633,11 +630,11 @@ mod test {
   }
 
 
-  fn random_str(rng: &mut IsaacRng) -> ~str {
-    let len = rng.gen_uint_range(0, 40);
+  fn random_str<R: rand::Rng>(rng: &mut R) -> ~str {
+    let len = rng.gen_integer_range::<uint>(0, 40);
     let mut s = ~"";
     do len.times {
-      let c = char::from_u32(rng.gen_uint_range(1, 512) as u32).unwrap();
+      let c = char::from_u32(rng.gen_integer_range::<uint>(1, 512) as u32).unwrap();
       s.push_char(c);
     }
     return s;
