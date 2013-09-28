@@ -27,6 +27,7 @@ let decoded = match decode_html(encoded) {
 assert_eq!(decoded, ~"Cats & dogs");
 ```
 
-Both encoding and decoding function are available in forms that take a `Writer` for output rather
+###Avoiding allocations
+Both the encoding and decoding functions are available in forms that take a `Writer` for output rather
 than returning an `~str`. These version can be used to avoid allocation and copying if the returned
 `~str` was just going to be written to a `Writer` anyway.
