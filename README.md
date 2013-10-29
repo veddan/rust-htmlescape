@@ -7,7 +7,7 @@ All example assume a `use htmlescape::*;` is present.
 
 ```rust
 let title = "Cats & dogs";                                                                        
-let tag = fmt!("<title>%s</title>", encode_minimal(title));                                       
+let tag = format!("<title>{}</title>", encode_minimal(title));                                       
 assert_eq!(tag, ~"<title>Cats &amp; dogs</title>");                                               
 ```                                                                                               
 

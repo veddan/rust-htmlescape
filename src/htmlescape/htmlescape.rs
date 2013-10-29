@@ -1,4 +1,5 @@
-use std::io::{BytesWriter, WriterUtil, ReaderUtil, with_str_reader};
+use std::rt::io::{Writer, Reader, Decorator};
+use std::rt::io::mem::{MemWriter, BufReader};
 use std::{str, num, char, cast};
 
 static named_entities: &'static[(&'static str, char)] = &'static [
@@ -303,16 +304,16 @@ fn get_entity(c: char) -> Option<&'static str> {
  *
  * ~~~
  * let name = "dummy onmouseover=alert(/XSS/)";  // User input
- * let tag = fmt!("<option value=%s>", encode_minimal(name));
+ * let tag = format!("<option value={}>", encode_minimal(name));
  * // Here `tag` is  "<option value=dummy onmouseover=alert(/XSS/)>"
  * ~~~
  * 
  * Use `escape_attribute` for escaping HTML attribute values.
  */
 pub fn encode_minimal(s: &str) -> ~str {
-  let writer = BytesWriter::new();
+  let writer = MemWriter::new();
   encode_minimal_w(s, &writer);
-  return str::from_utf8(*writer.bytes);
+  return str::from_utf8(writer.inner());
 }
 
 /**
@@ -329,14 +330,14 @@ pub fn encode_minimal_w<T: Writer>(s: &str, writer: &T) {
   for c in s.iter() {
     match get_entity(c) {
       None => writer.write_char(c),
-      Some(entity) => writer.write_str(entity)
+      Some(entity) => writer.write(entity.as_bytes())
     };
   }
 }
 
 fn write_hex<W: Writer>(c: char, writer: &W) {
   let hex = "0123456789ABCDEF";
-  writer.write_str("&#x");
+  writer.write("&#x".as_bytes());
   let n = c as u8;
   writer.write_u8(hex[(n & 0xF0) >> 4]);
   writer.write_u8(hex[n & 0x0F]);
@@ -366,9 +367,9 @@ fn write_hex<W: Writer>(c: char, writer: &W) {
  * ~~~                                                                                              
  */      
 pub fn encode_attribute(s: &str) -> ~str {
-  let writer = BytesWriter::new();
+  let writer = MemWriter::new();
   encode_attribute_w(s, &writer);
-  return str::from_utf8(*writer.bytes);
+  return str::from_utf8(writer.inner());
 }
 
 /**
@@ -382,9 +383,10 @@ pub fn encode_attribute(s: &str) -> ~str {
  * - `writer` - Output is written to here.
  */
 pub fn encode_attribute_w<T: Writer>(s: &str, writer: &T) {
+  let mut buf = ['\0',..4];
   for c in s.iter() {
     match get_entity(c) {
-      Some(entity) => writer.write_str(entity),
+      Some(entity) => writer.write(entity.as_bytes()),
       None => 
         if (c as uint) < 256 && !c.is_alphanumeric() {
           write_hex(c, writer);
@@ -407,7 +409,7 @@ enum DecodeState {
 
 fn decode_named_entity(entity: &str) -> Result<char, ~str> {
   match named_entities.bsearch(|&(ent, _)| {ent.cmp(&entity) }) {
-    None => Err(fmt!("no such entity '&%s;", entity)),
+    None => Err(format!("no such entity '&{};", entity)),
     Some(idx) => {
       let (_, c) = named_entities[idx];
       Ok(c)
@@ -419,16 +421,16 @@ fn decode_numeric(esc: &str, radix: uint) -> Result<char, ~str> {
   match num::from_str_radix::<u32>(esc, radix) {
     Some(n) => match char::from_u32(n) {
       Some(c) => Ok(c),
-      None => Err(fmt!("invalid character %u in \"%s\"", n as uint, esc))
+      None => Err(format!("invalid character {} in \"{}\"", n, esc))
     },
-    None => Err(fmt!("invalid escape \"%s\"", esc))
+    None => Err(format!("invalid escape \"{}\"", esc))
   }
 }
 
 macro_rules! try_parse(
   ($parse:expr $pos:ident) => (
     match $parse {
-      Err(reason) => return Err(fmt!("at %d: %s", $pos, reason)),
+      Err(reason) => return Err(format!("at {}: {}", $pos, reason)),
       Ok(res) => res
     }
   );)
@@ -489,12 +491,12 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
       }
       Hex if c.is_digit_radix(16) => buf.push_char(c),
           Dec if c.is_digit() => buf.push_char(c),
-          _ => return Err(fmt!("at %d: parse error", pos))
+          _ => return Err(format!("at {}: parse error", pos))
     }
     pos += 1;
   }
   if state != Normal {
-    Err(fmt!("unfinished entity \"%s\"", buf))
+    Err(format!("unfinished entity \"{}\"", buf))
   } else {
     Ok(())
   }
@@ -520,12 +522,11 @@ pub fn decode_html_rw<R: Reader, W: Writer>(reader: &R, writer: &W) -> Result<()
  * (`s == "&amp hej och hå"`) or otherwise malformed entities.
  */
 pub fn decode_html(s: &str) -> Result<~str, ~str> {
-  let writer = BytesWriter::new();
-  let res = do with_str_reader(s) |reader| {
-    decode_html_rw(&reader, &writer)
-  };
+  let writer = MemWriter::new();
+  let reader = BufReader::new(s.as_bytes().as_slice());
+  let res = decode_html_rw(&reader, &writer);
   match res {
-    Ok(_) => Ok(str::from_utf8(*writer.bytes)),
+    Ok(_) => Ok(str::from_utf8(writer.inner())),
     Err(err) => Err(err)
   }
 }
