@@ -1,10 +1,6 @@
-#[link(name = "htmlescape",
-       vers = "0.1.0",
-       author = "Viktor Dahl",
-       url = "https://github.com/veddan/rust-htmlescape")];
-
+#[crate_id = "htmlescape#0.2.0"];
 #[comment = "HTML entity-encoding/decoding library"];
-#[crate_type = "lib"];
+#[crate_type = "rlib"];
 
 #[feature(globs)];
 #[feature(macro_rules)];
