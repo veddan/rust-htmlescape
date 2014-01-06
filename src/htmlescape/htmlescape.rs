@@ -275,57 +275,55 @@ fn get_entity(c: char) -> Option<&'static str> {
   }
 }
 
-/**
- * HTML entity-encode a string.
- *
- * Entity-encodes a string with a minimal set of entities:
- *
- * - `" -- &quot;`
- * - `& -- &amp;`
- * - `' -- &#x27;`
- * - `< -- &lt;`
- * - `> -- &gt;`
- * 
- * # Arguments
- * - `s` - The string to encode.
- * 
- * # Return value
- * The encoded string.
- *
- * # Example
- * ~~~
- * let encoded = encode_minimal("<em>Hej!</em>");
- * assert_eq!(encoded, ~"&lt;em&gt;Hej!&lt;/em&gt;");
- * ~~~
- *
- * # Safety notes
- * Using the function to encode an untrusted string that is to be used as a HTML attribute value
- * may lead to XSS vulnerabilities. Consider the following example:
- *
- * ~~~
- * let name = "dummy onmouseover=alert(/XSS/)";  // User input
- * let tag = format!("<option value={}>", encode_minimal(name));
- * // Here `tag` is  "<option value=dummy onmouseover=alert(/XSS/)>"
- * ~~~
- * 
- * Use `escape_attribute` for escaping HTML attribute values.
- */
+///
+/// HTML entity-encode a string.
+///
+/// Entity-encodes a string with a minimal set of entities:
+///
+/// - `" -- &quot;`
+/// - `& -- &amp;`
+/// - `' -- &#x27;`
+/// - `< -- &lt;`
+/// - `> -- &gt;`
+///
+/// # Arguments
+/// - `s` - The string to encode.
+///
+/// # Return value
+/// The encoded string.
+///
+/// # Example
+/// ~~~
+/// let encoded = encode_minimal("<em>Hej!</em>");
+/// assert_eq!(encoded, ~"&lt;em&gt;Hej!&lt;/em&gt;");
+/// ~~~
+///
+/// # Safety notes
+/// Using the function to encode an untrusted string that is to be used as a HTML attribute value
+/// may lead to XSS vulnerabilities. Consider the following example:
+///
+/// ~~~
+/// let name = "dummy onmouseover=alert(/XSS/)";  // User input
+/// let tag = format!("<option value={}>", encode_minimal(name));
+/// // Here `tag` is  "<option value=dummy onmouseover=alert(/XSS/)>"
+/// ~~~
+///
+/// Use `escape_attribute` for escaping HTML attribute values.
 pub fn encode_minimal(s: &str) -> ~str {
   let mut writer = MemWriter::new();
   encode_minimal_w(s, &mut writer);
   return str::from_utf8_owned(writer.inner());
 }
 
-/**
- * HTML entity-encode a string.
- *
- * Similar to `encode_minimal`, except that the output is written to a `Writer` rather
- * than returned as a `~str`.
- * 
- * # Arguments
- * - `s` - The string to encode.
- * - `writer` - Output is written to here.
- */
+///
+/// HTML entity-encode a string.
+///
+/// Similar to `encode_minimal`, except that the output is written to a `Writer` rather
+/// than returned as a `~str`.
+///
+/// # Arguments
+/// - `s` - The string to encode.
+/// - `writer` - Output is written to here.
 pub fn encode_minimal_w<W: Writer>(s: &str, writer: &mut W) {
   for c in s.chars() {
     match get_entity(c) {
@@ -344,49 +342,47 @@ fn write_hex<W: Writer>(c: char, writer: &mut W) {
   writer.write_char(';');
 }
 
-/**
- * HTML entity-encodes a string for use in attributes values.
- *
- * Entity-encodes a string using an extensive set of entities, giving a string suitable for use
- * in HTML attribute values. All entities from `encode_minimal` are used, and further, all
- * non-alphanumeric ASCII characters are hex-encoded (`&#x__;`).
- * See the [OWASP XSS Prevention Cheat Sheet](
- * https://www.owasp.org/index.php/XSS_(Cross_Site_Scripting)_Prevention_Cheat_Sheet) for more
- * information on entity-encoding for attribute values.
- *
- * # Arguments                                                                                      
- * - `s` - The string to encode.                                                                      
- *                                                                                                  
- * # Return value                                                                                   
- * The encoded string.                                                                              
- *                                                                                                  
- * # Example                                                                                        
- * ~~~                                                                                              
- * let encoded = encode_attribute("\"No\", he said.");                                                   
- * assert_eq!(encoded, ~"&quot;No&quote;&#x2C;&#x20;he&#x20;said&#x2E;");
- * ~~~                                                                                              
- */      
+///
+/// HTML entity-encodes a string for use in attributes values.
+///
+/// Entity-encodes a string using an extensive set of entities, giving a string suitable for use
+/// in HTML attribute values. All entities from `encode_minimal` are used, and further, all
+/// non-alphanumeric ASCII characters are hex-encoded (`&#x__;`).
+/// See the [OWASP XSS Prevention Cheat Sheet](
+/// https://www.owasp.org/index.php/XSS_(Cross_Site_Scripting)_Prevention_Cheat_Sheet) for more
+/// information on entity-encoding for attribute values.
+///
+/// # Arguments
+/// - `s` - The string to encode.
+///
+/// # Return value
+/// The encoded string.
+///
+/// # Example
+/// ~~~
+/// let encoded = encode_attribute("\"No\", he said.");
+/// assert_eq!(encoded, ~"&quot;No&quote;&#x2C;&#x20;he&#x20;said&#x2E;");
+/// ~~~
 pub fn encode_attribute(s: &str) -> ~str {
   let mut writer = MemWriter::new();
   encode_attribute_w(s, &mut writer);
   return str::from_utf8_owned(writer.inner());
 }
 
-/**
- * HTML entity-encodes a string for use in attributes values.
- *
- * Similar to `encode_attribute`, except that the output is written to a `Writer` rather
- * than returned as a `~str`.
- * 
- * # Arguments
- * - `s` - The string to encode.
- * - `writer` - Output is written to here.
- */
+///
+/// HTML entity-encodes a string for use in attributes values.
+///
+/// Similar to `encode_attribute`, except that the output is written to a `Writer` rather
+/// than returned as a `~str`.
+///
+/// # Arguments
+/// - `s` - The string to encode.
+/// - `writer` - Output is written to here.
 pub fn encode_attribute_w<W: Writer>(s: &str, writer: &mut W) {
   for c in s.chars() {
     match get_entity(c) {
       Some(entity) => writer.write(entity.as_bytes()),
-      None => 
+      None =>
         if (c as uint) < 256 && !c.is_alphanumeric() {
           write_hex(c, writer);
         } else {
@@ -434,19 +430,18 @@ macro_rules! try_parse(
     }
   );)
 
-/** Decodes an entity-encoded string.
- * 
- * Similar to `decode_html`, except reading from a `Reader` rather than a string, and
- * writing to a writer rather than returning a `~str`.
- *
- * # Arguments
- * - `reader` - Encoded data is read from here.
- * - `writer` - Decoded data is written to here.
- *
- * # Return value
- * On success `Ok(())` is returned. On error, `Err(reason)` is returned, with `reason`
- * containing a description of the error.
- */
+/// Decodes an entity-encoded string.
+///
+/// Similar to `decode_html`, except reading from a `Reader` rather than a string, and
+/// writing to a writer rather than returning a `~str`.
+///
+/// # Arguments
+/// - `reader` - Encoded data is read from here.
+/// - `writer` - Decoded data is written to here.
+///
+/// # Return value
+/// On success `Ok(())` is returned. On error, `Err(reason)` is returned, with `reason`
+/// containing a description of the error.
 pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> Result<(), ~str> {
   let mut state: DecodeState = Normal;
   let mut pos = 0;
@@ -502,25 +497,23 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
   }
 }
 
-/**
- * Decodes an entity-encoded string.
- *
- * Decodes an entity encoded string, replacing HTML entities (`&amp;`, `&#20;` ...) with the
- * the corresponding character. Case matters for named entities, ie. `&Amp;` is invalid.
- * Case does not matter for hex entities, so `&#x2E;` and `&#x2e;` are treated the same.
- * 
- * # Arguments
- * - `s` - Entity-encoded string to decode.
- *
- * # Return value
- * On success `Ok(decoded)` is returned, with `decoded` being the decoded string.
- * On error `Err(reason)` is returned, with `reason` containing a description of the error.
- * 
- * # Failure
- * The function will fail if input string contains invalid named entities (eg. `&nosuchentity;`),
- * invalid hex entities (eg. `&#xRT;`), invalid decimal entities (eg. `&#-1;), unclosed entities
- * (`s == "&amp hej och hå"`) or otherwise malformed entities.
- */
+/// Decodes an entity-encoded string.
+///
+/// Decodes an entity encoded string, replacing HTML entities (`&amp;`, `&#20;` ...) with the
+/// the corresponding character. Case matters for named entities, ie. `&Amp;` is invalid.
+/// Case does not matter for hex entities, so `&#x2E;` and `&#x2e;` are treated the same.
+///
+/// # Arguments
+/// - `s` - Entity-encoded string to decode.
+///
+/// # Return value
+/// On success `Ok(decoded)` is returned, with `decoded` being the decoded string.
+/// On error `Err(reason)` is returned, with `reason` containing a description of the error.
+///
+/// # Failure
+/// The function will fail if input string contains invalid named entities (eg. `&nosuchentity;`),
+/// invalid hex entities (eg. `&#xRT;`), invalid decimal entities (eg. `&#-1;), unclosed entities
+/// (`s == "&amp hej och hå"`) or otherwise malformed entities.
 pub fn decode_html(s: &str) -> Result<~str, ~str> {
   let mut writer = MemWriter::new();
   let bytes = s.as_bytes();
