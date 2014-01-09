@@ -1,4 +1,4 @@
-use std::io::{Writer, Decorator, Buffer};
+use std::io::{Writer, Buffer};
 use std::io::mem::{MemWriter, BufReader};
 use std::{str, num, char};
 
@@ -312,7 +312,7 @@ fn get_entity(c: char) -> Option<&'static str> {
 pub fn encode_minimal(s: &str) -> ~str {
   let mut writer = MemWriter::new();
   encode_minimal_w(s, &mut writer);
-  return str::from_utf8_owned(writer.inner());
+  return str::from_utf8_owned(writer.unwrap());
 }
 
 ///
@@ -366,7 +366,7 @@ fn write_hex<W: Writer>(c: char, writer: &mut W) {
 pub fn encode_attribute(s: &str) -> ~str {
   let mut writer = MemWriter::new();
   encode_attribute_w(s, &mut writer);
-  return str::from_utf8_owned(writer.inner());
+  return str::from_utf8_owned(writer.unwrap());
 }
 
 ///
@@ -520,7 +520,7 @@ pub fn decode_html(s: &str) -> Result<~str, ~str> {
   let mut reader = BufReader::new(bytes.as_slice());
   let res = decode_html_rw(&mut reader, &mut writer);
   match res {
-    Ok(_) => Ok(str::from_utf8_owned(writer.inner())),
+    Ok(_) => Ok(str::from_utf8_owned(writer.unwrap())),
     Err(err) => Err(err)
   }
 }
