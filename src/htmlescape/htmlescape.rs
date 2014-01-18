@@ -1,5 +1,4 @@
-use std::io::{Writer, Buffer};
-use std::io::mem::{MemWriter, BufReader};
+use std::io::{Writer, Buffer, MemWriter, BufReader};
 use std::{str, num, char};
 
 static named_entities: &'static[(&'static str, char)] = &'static [
