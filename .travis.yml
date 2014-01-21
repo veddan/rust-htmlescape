@@ -1,7 +1,13 @@
+env:
+  global:
+    - secure: Q/5Dl3Pme4W1wFRm+hIbXKRVDTvz1LXDjWM1p+mfOE3JDRoe/enoO2OqTdnKPJCMAAgz5ybC/K9IGGlBSxvaSzmS/dvKg7vsP2VsZgRxJ4ICxdRnzBqv8c6yINb+g8Br9juRDuLve0kDKvZ5PsYCKfvW7Br9miVQF8RfmV3KUG0=
 before_install:
   - yes | sudo add-apt-repository ppa:hansjorg/rust
   - sudo apt-get update
 install:
   - sudo apt-get install rust-nightly
 script:
-  - rustpkg build htmlescape
+  - rustpkg test htmlescape
+  - rustdoc src/htmlescape/lib.rs
+after_script:
+  - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
