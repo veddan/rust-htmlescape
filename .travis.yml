@@ -7,7 +7,9 @@ before_install:
 install:
   - sudo apt-get install rust-nightly
 script:
-  - rustpkg test htmlescape
+  - rustc src/htmlescape/test.rs --test
+  - ./htmlescape --test
+  - rustc src/htmlescape/lib.rs
   - rustdoc src/htmlescape/lib.rs
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh
