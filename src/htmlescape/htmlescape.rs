@@ -1,4 +1,5 @@
-use std::io::{Writer, Buffer, MemWriter, BufReader};
+use std::io::{Writer, Buffer, MemWriter, BufReader, IoResult};
+use std::io;
 use std::{str, num, char};
 
 static named_entities: &'static[(&'static str, char)] = &'static [
@@ -310,8 +311,10 @@ fn get_entity(c: char) -> Option<&'static str> {
 /// Use `escape_attribute` for escaping HTML attribute values.
 pub fn encode_minimal(s: &str) -> ~str {
   let mut writer = MemWriter::new();
-  encode_minimal_w(s, &mut writer);
-  return str::from_utf8_owned(writer.unwrap()).unwrap();
+  match encode_minimal_w(s, &mut writer) {
+    Err(_) => fail!(),
+    Ok(_) => str::from_utf8_owned(writer.unwrap()).unwrap()
+  }
 }
 
 ///
@@ -323,22 +326,24 @@ pub fn encode_minimal(s: &str) -> ~str {
 /// # Arguments
 /// - `s` - The string to encode.
 /// - `writer` - Output is written to here.
-pub fn encode_minimal_w<W: Writer>(s: &str, writer: &mut W) {
+pub fn encode_minimal_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
   for c in s.chars() {
     match get_entity(c) {
-      None => writer.write_char(c),
-      Some(entity) => writer.write(entity.as_bytes())
-    };
+      None => if_ok!(writer.write_char(c)),
+      Some(entity) => if_ok!(writer.write(entity.as_bytes()))
+    }
   }
+  Ok(())
 }
 
-fn write_hex<W: Writer>(c: char, writer: &mut W) {
+fn write_hex<W: Writer>(c: char, writer: &mut W) -> IoResult<()> {
   let hex = "0123456789ABCDEF";
-  writer.write("&#x".as_bytes());
+  if_ok!(writer.write("&#x".as_bytes()));
   let n = c as u8;
-  writer.write_u8(hex[(n & 0xF0) >> 4]);
-  writer.write_u8(hex[n & 0x0F]);
-  writer.write_char(';');
+  if_ok!(writer.write_u8(hex[(n & 0xF0) >> 4]));
+  if_ok!(writer.write_u8(hex[n & 0x0F]));
+  if_ok!(writer.write_char(';'));
+  Ok(())
 }
 
 ///
@@ -364,8 +369,10 @@ fn write_hex<W: Writer>(c: char, writer: &mut W) {
 /// ~~~
 pub fn encode_attribute(s: &str) -> ~str {
   let mut writer = MemWriter::new();
-  encode_attribute_w(s, &mut writer);
-  return str::from_utf8_owned(writer.unwrap()).unwrap();
+  match encode_attribute_w(s, &mut writer) {
+    Err(_) => fail!(),
+    Ok(_) => str::from_utf8_owned(writer.unwrap()).unwrap()
+  }
 }
 
 ///
@@ -377,18 +384,19 @@ pub fn encode_attribute(s: &str) -> ~str {
 /// # Arguments
 /// - `s` - The string to encode.
 /// - `writer` - Output is written to here.
-pub fn encode_attribute_w<W: Writer>(s: &str, writer: &mut W) {
+pub fn encode_attribute_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
   for c in s.chars() {
     match get_entity(c) {
-      Some(entity) => writer.write(entity.as_bytes()),
+      Some(entity) => if_ok!(writer.write(entity.as_bytes())),
       None =>
         if (c as uint) < 256 && !c.is_alphanumeric() {
-          write_hex(c, writer);
+          if_ok!(write_hex(c, writer))
         } else {
-          writer.write_char(c);
+          if_ok!(writer.write_char(c))
         }
     }
   }
+  Ok(())
 }
 
 #[deriving(Eq)]
@@ -429,6 +437,14 @@ macro_rules! try_parse(
     }
   );)
 
+macro_rules! do_io(
+  ($io:expr) => (
+    match $io {
+      Err(e) => return Err(e.to_str()),
+      Ok(_) => ()
+    }
+  );)
+
 /// Decodes an entity-encoded string.
 ///
 /// Similar to `decode_html`, except reading from a `Reader` rather than a string, and
@@ -445,15 +461,16 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
   let mut state: DecodeState = Normal;
   let mut pos = 0;
   let mut buf = ~"";
-  buf.reserve_at_least(8);
+  buf.reserve(8);
   loop {
     let c = match reader.read_char() {
-      Some(c) => c,
-      None => break
+      Ok(c) => c,
+      Err(ref e) if e.kind == io::EndOfFile => break,
+      Err(e) => return Err(e.to_str())
     };
     match state {
       Normal if c == '&' => state = Entity,
-      Normal => writer.write_char(c),
+      Normal => do_io!(writer.write_char(c)),
       Entity if c == '#' => state = Numeric,
       Entity => {
         state = Named;
@@ -462,7 +479,7 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
       Named if c == ';' => {
         state = Normal;
         let ch = try_parse!(decode_named_entity(buf) pos);
-        writer.write_char(ch);
+        do_io!(writer.write_char(ch));
         buf.clear();
       }
       Named => buf.push_char(c),
@@ -474,13 +491,13 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
       Dec if c == ';' => {
         state = Normal;
         let ch = try_parse!(decode_numeric(buf, 10) pos);
-        writer.write_char(ch);
+        do_io!(writer.write_char(ch));
         buf.clear();
       }
       Hex if c == ';' => {
         state = Normal;
         let ch = try_parse!(decode_numeric(buf, 16) pos);
-        writer.write_char(ch);
+        do_io!(writer.write_char(ch));
         buf.clear();
       }
       Hex if c.is_digit_radix(16) => buf.push_char(c),
