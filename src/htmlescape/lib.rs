@@ -5,5 +5,7 @@
 #[feature(globs)];
 #[feature(macro_rules)];
 
-pub mod htmlescape;
+pub use htmlescape::*;
+
+mod htmlescape;
 
