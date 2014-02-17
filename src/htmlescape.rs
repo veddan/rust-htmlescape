@@ -543,7 +543,7 @@ pub fn decode_html(s: &str) -> Result<~str, ~str> {
 
 #[cfg(test)]
 mod test {
-  extern mod extra;
+  extern crate extra;
 
   use std::rand;
   use std::char;
