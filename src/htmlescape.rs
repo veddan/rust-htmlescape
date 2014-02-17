@@ -1,5 +1,6 @@
 use std::io::{Writer, Buffer, MemWriter, BufReader, IoResult};
 use std::io;
+use std::ascii::{AsciiCast};
 use std::{str, num, char};
 
 static named_entities: &'static[(&'static str, char)] = &'static [
@@ -310,7 +311,7 @@ fn get_entity(c: char) -> Option<&'static str> {
 ///
 /// Use `escape_attribute` for escaping HTML attribute values.
 pub fn encode_minimal(s: &str) -> ~str {
-  let mut writer = MemWriter::new();
+  let mut writer = MemWriter::with_capacity(s.len() * 4 / 3);
   match encode_minimal_w(s, &mut writer) {
     Err(_) => fail!(),
     Ok(_) => str::from_utf8_owned(writer.unwrap()).unwrap()
@@ -368,7 +369,7 @@ fn write_hex<W: Writer>(c: char, writer: &mut W) -> IoResult<()> {
 /// assert_eq!(encoded, ~"&quot;No&quote;&#x2C;&#x20;he&#x20;said&#x2E;");
 /// ~~~
 pub fn encode_attribute(s: &str) -> ~str {
-  let mut writer = MemWriter::new();
+  let mut writer = MemWriter::with_capacity(s.len() * 3);
   match encode_attribute_w(s, &mut writer) {
     Err(_) => fail!(),
     Ok(_) => str::from_utf8_owned(writer.unwrap()).unwrap()
@@ -389,7 +390,7 @@ pub fn encode_attribute_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
     match get_entity(c) {
       Some(entity) => if_ok!(writer.write(entity.as_bytes())),
       None =>
-        if (c as uint) < 256 && !c.is_alphanumeric() {
+        if (c as uint) < 256 && unsafe { !c.to_ascii_nocheck().is_alnum() } {
           if_ok!(write_hex(c, writer))
         } else {
           if_ok!(writer.write_char(c))
@@ -531,7 +532,7 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
 /// invalid hex entities (eg. `&#xRT;`), invalid decimal entities (eg. `&#-1;), unclosed entities
 /// (`s == "&amp hej och hå"`) or otherwise malformed entities.
 pub fn decode_html(s: &str) -> Result<~str, ~str> {
-  let mut writer = MemWriter::new();
+  let mut writer = MemWriter::with_capacity(s.len());
   let bytes = s.as_bytes();
   let mut reader = BufReader::new(bytes.as_slice());
   let res = decode_html_rw(&mut reader, &mut writer);
@@ -549,6 +550,8 @@ mod test {
   use std::char;
 
   use htmlescape::*;
+
+  static big_str: &'static str = include_str!("../moonstone-short.txt");
 
   macro_rules! assert_typed_eq (($T: ty, $given: expr, $expected: expr) => ({
     let given_val: &$T = $given;
@@ -581,7 +584,7 @@ mod test {
       ("", ""),
       ("0 3px", "0&#x20;3px"),
       ("<img \"\"\">", "&lt;img&#x20;&quot;&quot;&quot;&gt;"),
-      ("hej; hå", "hej&#x3B;&#x20;hå"),
+      ("hej; hå", "hej&#x3B;&#x20;h&#xE5;"),
       ];
     for &(input, expected) in data.iter() {
       let actual = encode_attribute(input);
@@ -640,6 +643,31 @@ mod test {
     }
   }
 
+  #[bench]
+  fn bench_encode_attribute(bh: &mut extra::test::BenchHarness) {
+    bh.iter(|| { encode_attribute(big_str) });
+    bh.bytes = big_str.len() as u64;
+  }
+
+  #[bench]
+  fn bench_encode_minimal(bh: &mut extra::test::BenchHarness) {
+    bh.iter(|| { encode_minimal(big_str) });
+    bh.bytes = big_str.len() as u64;
+  }
+
+  #[bench]
+  fn bench_decode_attribute(bh: &mut extra::test::BenchHarness) {
+    let encoded = encode_attribute(big_str);
+    bh.iter(|| { decode_html(encoded) });
+    bh.bytes = encoded.len() as u64;
+  }
+
+  #[bench]
+  fn bench_decode_minimal(bh: &mut extra::test::BenchHarness) {
+    let encoded = encode_minimal(big_str);
+    bh.iter(|| { decode_html(encoded) });
+    bh.bytes = encoded.len() as u64;
+  }
 
   fn random_str<R: rand::Rng>(rng: &mut R) -> ~str {
     let len = rng.gen_range::<uint>(0, 40);
