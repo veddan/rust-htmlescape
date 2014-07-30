@@ -10,7 +10,7 @@ All example assume a `extern mod htmlescape;` and `use htmlescape::{relevant fun
 ```rust
 let title = "Cats & dogs";
 let tag = format!("<title>{}</title>", encode_minimal(title));
-assert_eq!(tag, ~"<title>Cats &amp; dogs</title>");
+assert_eq!(tag.as_slice(), "<title>Cats &amp; dogs</title>");
 ```
 
 There is also a `htmlescape::encode_attribute()` function for encoding strings that are to be used
@@ -26,10 +26,10 @@ let decoded = match decode_html(encoded) {
   Err(reason) => fail!("Something went wrong: {}", reason),
   Ok(s) => s
 };
-assert_eq!(decoded, ~"Cats & dogs");
+assert_eq!(decoded.as_slice(), "Cats & dogs");
 ```
 
 ###Avoiding allocations
 Both the encoding and decoding functions are available in forms that take a `Writer` for output rather
-than returning an `~str`. These version can be used to avoid allocation and copying if the returned
-`~str` was just going to be written to a `Writer` anyway.
+than returning an `String`. These version can be used to avoid allocation and copying if the returned
+`String` was just going to be written to a `Writer` anyway.

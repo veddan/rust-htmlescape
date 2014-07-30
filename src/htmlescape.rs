@@ -1,9 +1,8 @@
 use std::io::{Writer, Buffer, MemWriter, BufReader, IoResult};
 use std::io;
-use std::ascii::{AsciiCast};
-use std::{str, num, char};
+use std::{num, char};
 
-static named_entities: &'static[(&'static str, char)] = &'static [
+static named_entities: &'static[(&'static str, char)] = &[
     ("AElig", '\u00C6'),
     ("Aacute", '\u00C1'),
     ("Acirc", '\u00C2'),
@@ -310,11 +309,11 @@ fn get_entity(c: char) -> Option<&'static str> {
 /// ~~~
 ///
 /// Use `escape_attribute` for escaping HTML attribute values.
-pub fn encode_minimal(s: &str) -> ~str {
+pub fn encode_minimal(s: &str) -> String {
     let mut writer = MemWriter::with_capacity(s.len() * 4 / 3);
     match encode_minimal_w(s, &mut writer) {
         Err(_) => fail!(),
-        Ok(_) => str::from_utf8_owned(writer.unwrap()).unwrap()
+        Ok(_) => String::from_utf8(writer.unwrap()).unwrap()
     }
 }
 
@@ -330,20 +329,20 @@ pub fn encode_minimal(s: &str) -> ~str {
 pub fn encode_minimal_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
     for c in s.chars() {
         match get_entity(c) {
-            None => if_ok!(writer.write_char(c)),
-            Some(entity) => if_ok!(writer.write(entity.as_bytes()))
+            None => try!(writer.write_char(c)),
+            Some(entity) => try!(writer.write(entity.as_bytes()))
         }
     }
     Ok(())
 }
 
 fn write_hex<W: Writer>(c: char, writer: &mut W) -> IoResult<()> {
-    let hex = "0123456789ABCDEF";
-    if_ok!(writer.write("&#x".as_bytes()));
+    let hex = "0123456789ABCDEF".as_bytes();
+    try!(writer.write("&#x".as_bytes()));
     let n = c as u8;
-    if_ok!(writer.write_u8(hex[(n & 0xF0) >> 4]));
-    if_ok!(writer.write_u8(hex[n & 0x0F]));
-    if_ok!(writer.write_char(';'));
+    try!(writer.write_u8(hex[((n & 0xF0) >> 4) as uint]));
+    try!(writer.write_u8(hex[(n & 0x0F) as uint]));
+    try!(writer.write_char(';'));
     Ok(())
 }
 
@@ -368,11 +367,11 @@ fn write_hex<W: Writer>(c: char, writer: &mut W) -> IoResult<()> {
 /// let encoded = encode_attribute("\"No\", he said.");
 /// assert_eq!(encoded, ~"&quot;No&quote;&#x2C;&#x20;he&#x20;said&#x2E;");
 /// ~~~
-pub fn encode_attribute(s: &str) -> ~str {
+pub fn encode_attribute(s: &str) -> String {
     let mut writer = MemWriter::with_capacity(s.len() * 3);
     match encode_attribute_w(s, &mut writer) {
         Err(_) => fail!(),
-        Ok(_) => str::from_utf8_owned(writer.unwrap()).unwrap()
+        Ok(_) => String::from_utf8(writer.unwrap()).unwrap()
     }
 }
 
@@ -380,27 +379,28 @@ pub fn encode_attribute(s: &str) -> ~str {
 /// HTML entity-encodes a string for use in attributes values.
 ///
 /// Similar to `encode_attribute`, except that the output is written to a `Writer` rather
-/// than returned as a `~str`.
+/// than returned as a `String`.
 ///
 /// # Arguments
 /// - `s` - The string to encode.
 /// - `writer` - Output is written to here.
 pub fn encode_attribute_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
     for c in s.chars() {
+        let b = c as uint;
         match get_entity(c) {
-            Some(entity) => if_ok!(writer.write(entity.as_bytes())),
+            Some(entity) => try!(writer.write(entity.as_bytes())),
             None =>
-                if (c as uint) < 256 && unsafe { !c.to_ascii_nocheck().is_alnum() } {
-                    if_ok!(write_hex(c, writer))
+                if b < 256 && (b > 127 || unsafe { !c.to_ascii_nocheck().is_alnum() }) {
+                    try!(write_hex(c, writer))
                 } else {
-                    if_ok!(writer.write_char(c))
+                    try!(writer.write_char(c))
                 }
         }
     }
     Ok(())
 }
 
-#[deriving(Eq)]
+#[deriving(PartialEq, Eq)]
 enum DecodeState {
     Normal,
     Entity,
@@ -410,7 +410,7 @@ enum DecodeState {
     Dec
 }
 
-fn decode_named_entity(entity: &str) -> Result<char, ~str> {
+fn decode_named_entity(entity: &str) -> Result<char, String> {
     match named_entities.bsearch(|&(ent, _)| {ent.cmp(&entity) }) {
         None => Err(format!("no such entity '&{};", entity)),
         Some(idx) => {
@@ -420,18 +420,18 @@ fn decode_named_entity(entity: &str) -> Result<char, ~str> {
     }
 }
 
-fn decode_numeric(esc: &str, radix: uint) -> Result<char, ~str> {
+fn decode_numeric(esc: &str, radix: uint) -> Result<char, String> {
     match num::from_str_radix::<u32>(esc, radix) {
         Some(n) => match char::from_u32(n) {
             Some(c) => Ok(c),
-            None => Err(format!("invalid character {} in \"{}\"", n, esc))
+            None => Err(format!("invalid character '{}' in \"{}\"", n, esc))
         },
         None => Err(format!("invalid escape \"{}\"", esc))
     }
 }
 
 macro_rules! try_parse(
-    ($parse:expr $pos:ident) => (
+    ($parse:expr, $pos:ident) => (
         match $parse {
             Err(reason) => return Err(format!("at {}: {}", $pos, reason)),
             Ok(res) => res
@@ -441,7 +441,7 @@ macro_rules! try_parse(
 macro_rules! do_io(
     ($io:expr) => (
         match $io {
-            Err(e) => return Err(e.to_str()),
+            Err(e) => return Err(e.to_string()),
             Ok(_) => ()
         }
     );)
@@ -458,16 +458,16 @@ macro_rules! do_io(
 /// # Return value
 /// On success `Ok(())` is returned. On error, `Err(reason)` is returned, with `reason`
 /// containing a description of the error.
-pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> Result<(), ~str> {
+pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> Result<(), String> {
     let mut state: DecodeState = Normal;
-    let mut pos = 0;
-    let mut buf = ~"";
+    let mut pos = 0u;
+    let mut buf = String::new();
     buf.reserve(8);
     loop {
         let c = match reader.read_char() {
             Ok(c) => c,
             Err(ref e) if e.kind == io::EndOfFile => break,
-            Err(e) => return Err(e.to_str())
+            Err(e) => return Err(e.to_string())
         };
         match state {
             Normal if c == '&' => state = Entity,
@@ -479,7 +479,7 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
             }
             Named if c == ';' => {
                 state = Normal;
-                let ch = try_parse!(decode_named_entity(buf) pos);
+                let ch = try_parse!(decode_named_entity(buf.as_slice()), pos);
                 do_io!(writer.write_char(ch));
                 buf.clear();
             }
@@ -491,13 +491,13 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
             Numeric if c == 'x' => state = Hex,
             Dec if c == ';' => {
                 state = Normal;
-                let ch = try_parse!(decode_numeric(buf, 10) pos);
+                let ch = try_parse!(decode_numeric(buf.as_slice(), 10), pos);
                 do_io!(writer.write_char(ch));
                 buf.clear();
             }
             Hex if c == ';' => {
                 state = Normal;
-                let ch = try_parse!(decode_numeric(buf, 16) pos);
+                let ch = try_parse!(decode_numeric(buf.as_slice(), 16), pos);
                 do_io!(writer.write_char(ch));
                 buf.clear();
             }
@@ -531,20 +531,20 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
 /// The function will fail if input string contains invalid named entities (eg. `&nosuchentity;`),
 /// invalid hex entities (eg. `&#xRT;`), invalid decimal entities (eg. `&#-1;), unclosed entities
 /// (`s == "&amp hej och hå"`) or otherwise malformed entities.
-pub fn decode_html(s: &str) -> Result<~str, ~str> {
+pub fn decode_html(s: &str) -> Result<String, String> {
     let mut writer = MemWriter::with_capacity(s.len());
     let bytes = s.as_bytes();
     let mut reader = BufReader::new(bytes.as_slice());
     let res = decode_html_rw(&mut reader, &mut writer);
     match res {
-        Ok(_) => Ok(str::from_utf8_owned(writer.unwrap()).unwrap()),
+        Ok(_) => Ok(String::from_utf8(writer.unwrap()).unwrap()),
         Err(err) => Err(err)
     }
 }
 
 #[cfg(test)]
 mod test {
-    extern crate extra;
+    extern crate test;
 
     use std::rand;
     use std::char;
@@ -574,7 +574,7 @@ mod test {
 
         for &(input, expected) in data.iter() {
             let actual = encode_minimal(input);
-            assert_typed_eq!(str, actual, expected);
+            assert_eq!(actual.as_slice(), expected);
         }
     }
 
@@ -588,7 +588,7 @@ mod test {
             ];
         for &(input, expected) in data.iter() {
             let actual = encode_attribute(input);
-            assert_typed_eq!(str, actual, expected);
+            assert_eq!(actual.as_slice(), expected);
         }
     }
 
@@ -604,8 +604,8 @@ mod test {
             ];
         for &(input, expected) in data.iter() {
             match decode_html(input) {
-                Ok(actual) => assert_typed_eq!(str, expected, actual),
-                Err(reason) => fail!("Failed at \"{:s}\", reason \"{:s}\"", input, reason)
+                Ok(actual) => assert_eq!(actual.as_slice(), expected),
+                Err(reason) => fail!("Failed at \"{}\", reason \"{}\"", input, reason)
             }
         }
     }
@@ -625,53 +625,53 @@ mod test {
         for &input in data.iter() {
             match decode_html(input) {
                 Err(_) => (),
-                Ok(res) => fail!("Failed at \"{:s}\", expected error, got \"{:s}\"", input, res)
+                Ok(res) => fail!("Failed at \"{}\", expected error, got \"{}\"", input, res)
             }
         }
     }
 
     #[test]
     fn random_roundtrip() {
-        let mut rng = rand::rng();
-        for _ in range(1, 100) {
+        let mut rng = rand::weak_rng();
+        for _ in range(1u, 100) {
             let original = random_str(&mut rng);
-            let encoded = encode_attribute(original);
-            match decode_html(encoded) {
-                Err(reason) => fail!("error at \"{:s}\", reason: {:s}", original, reason),
+            let encoded = encode_attribute(original.as_slice());
+            match decode_html(encoded.as_slice()) {
+                Err(reason) => fail!("error at \"{}\", reason: {}", original, reason),
                 Ok(decoded) => assert_eq!(original, decoded)
             };
         }
     }
 
     #[bench]
-    fn bench_encode_attribute(bh: &mut extra::test::BenchHarness) {
+    fn bench_encode_attribute(bh: &mut test::Bencher) {
         bh.iter(|| { encode_attribute(big_str) });
         bh.bytes = big_str.len() as u64;
     }
 
     #[bench]
-    fn bench_encode_minimal(bh: &mut extra::test::BenchHarness) {
+    fn bench_encode_minimal(bh: &mut test::Bencher) {
         bh.iter(|| { encode_minimal(big_str) });
         bh.bytes = big_str.len() as u64;
     }
 
     #[bench]
-    fn bench_decode_attribute(bh: &mut extra::test::BenchHarness) {
+    fn bench_decode_attribute(bh: &mut test::Bencher) {
         let encoded = encode_attribute(big_str);
-        bh.iter(|| { decode_html(encoded) });
+        bh.iter(|| { decode_html(encoded.as_slice()) });
         bh.bytes = encoded.len() as u64;
     }
 
     #[bench]
-    fn bench_decode_minimal(bh: &mut extra::test::BenchHarness) {
+    fn bench_decode_minimal(bh: &mut test::Bencher) {
         let encoded = encode_minimal(big_str);
-        bh.iter(|| { decode_html(encoded) });
+        bh.iter(|| { decode_html(encoded.as_slice()) });
         bh.bytes = encoded.len() as u64;
     }
 
-    fn random_str<R: rand::Rng>(rng: &mut R) -> ~str {
+    fn random_str<R: rand::Rng>(rng: &mut R) -> String {
         let len = rng.gen_range::<uint>(0, 40);
-        let mut s = ~"";
+        let mut s = String::new();
         for _ in range(0, len) {
             let c = char::from_u32(rng.gen_range::<uint>(1, 512) as u32).unwrap();
             s.push_char(c);
