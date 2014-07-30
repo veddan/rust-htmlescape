@@ -1,0 +1,8 @@
+[package]
+name = "rust-htmlescape"
+version = "0.2.0"
+authors = [ "Viktor Dahl <pazaconyoman@gmail.com>" ]
+
+[[lib]]
+name = "htmlescape"
+path = "src/lib.rs"
