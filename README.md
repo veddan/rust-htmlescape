@@ -2,7 +2,7 @@
 [![Build Status](https://travis-ci.org/veddan/rust-htmlescape.png?branch=master)](https://travis-ci.org/veddan/rust-htmlescape)
 
 ## Example usage
-All example assume a `extern mod htmlescape;` and `use htmlescape::{relevant functions here};` is present.
+All example assume a `extern crate htmlescape;` and `use htmlescape::{relevant functions here};` is present.
 
 ###Encoding
 `htmlescape::encode_minimal()` encodes an input string using a minimal set of HTML entities.
