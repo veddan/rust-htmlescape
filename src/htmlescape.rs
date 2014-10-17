@@ -1,8 +1,9 @@
 use std::io::{Writer, Buffer, MemWriter, BufReader, IoResult};
 use std::io;
 use std::{num, char};
+use std::slice::{Found, NotFound};
 
-static named_entities: &'static[(&'static str, char)] = &[
+static NAMED_ENTITIES: &'static[(&'static str, char)] = &[
     ("AElig", '\u00C6'),
     ("Aacute", '\u00C1'),
     ("Acirc", '\u00C2'),
@@ -257,7 +258,7 @@ static named_entities: &'static[(&'static str, char)] = &[
     ("zwnj", '\u200C'),
 ];
 
-static minimal_entities: [(char, &'static str), ..5] = [
+static MINIMAL_ENTITIES: [(char, &'static str), ..5] = [
     ('"', "&quot;"),
     ('&', "&amp;"),
     ('\'', "&#x27;"),
@@ -266,10 +267,10 @@ static minimal_entities: [(char, &'static str), ..5] = [
 ];
 
 fn get_entity(c: char) -> Option<&'static str> {
-    match minimal_entities.bsearch(|&(ec, _)| { ec.cmp(&c) }) {
-        None => None,
-        Some(idx) => {
-            let (_, e) = minimal_entities[idx];
+    match MINIMAL_ENTITIES.binary_search(|&(ec, _)| { ec.cmp(&c) }) {
+        NotFound(..) => None,
+        Found(idx)   => {
+            let (_, e) = MINIMAL_ENTITIES[idx];
             Some(e)
         }
     }
@@ -294,8 +295,8 @@ fn get_entity(c: char) -> Option<&'static str> {
 ///
 /// # Example
 /// ~~~
-/// let encoded = encode_minimal("<em>Hej!</em>");
-/// assert_eq!(encoded, ~"&lt;em&gt;Hej!&lt;/em&gt;");
+/// let encoded = htmlescape::encode_minimal("<em>Hej!</em>");
+/// assert_eq!(encoded.as_slice(), "&lt;em&gt;Hej!&lt;/em&gt;");
 /// ~~~
 ///
 /// # Safety notes
@@ -304,7 +305,7 @@ fn get_entity(c: char) -> Option<&'static str> {
 ///
 /// ~~~
 /// let name = "dummy onmouseover=alert(/XSS/)";    // User input
-/// let tag = format!("<option value={}>", encode_minimal(name));
+/// let tag = format!("<option value={}>", htmlescape::encode_minimal(name));
 /// // Here `tag` is    "<option value=dummy onmouseover=alert(/XSS/)>"
 /// ~~~
 ///
@@ -321,7 +322,7 @@ pub fn encode_minimal(s: &str) -> String {
 /// HTML entity-encode a string.
 ///
 /// Similar to `encode_minimal`, except that the output is written to a `Writer` rather
-/// than returned as a `~str`.
+/// than returned as a `String`.
 ///
 /// # Arguments
 /// - `s` - The string to encode.
@@ -364,8 +365,8 @@ fn write_hex<W: Writer>(c: char, writer: &mut W) -> IoResult<()> {
 ///
 /// # Example
 /// ~~~
-/// let encoded = encode_attribute("\"No\", he said.");
-/// assert_eq!(encoded, ~"&quot;No&quote;&#x2C;&#x20;he&#x20;said&#x2E;");
+/// let encoded = htmlescape::encode_attribute("\"No\", he said.");
+/// assert_eq!(encoded.as_slice(), "&quot;No&quot;&#x2C;&#x20;he&#x20;said&#x2E;");
 /// ~~~
 pub fn encode_attribute(s: &str) -> String {
     let mut writer = MemWriter::with_capacity(s.len() * 3);
@@ -411,10 +412,10 @@ enum DecodeState {
 }
 
 fn decode_named_entity(entity: &str) -> Result<char, String> {
-    match named_entities.bsearch(|&(ent, _)| {ent.cmp(&entity) }) {
-        None => Err(format!("no such entity '&{};", entity)),
-        Some(idx) => {
-            let (_, c) = named_entities[idx];
+    match NAMED_ENTITIES.binary_search(|&(ent, _)| {ent.cmp(&entity) }) {
+        NotFound(..) => Err(format!("no such entity '&{};", entity)),
+        Found(idx)   => {
+            let (_, c) = NAMED_ENTITIES[idx];
             Ok(c)
         }
     }
@@ -449,7 +450,7 @@ macro_rules! do_io(
 /// Decodes an entity-encoded string.
 ///
 /// Similar to `decode_html`, except reading from a `Reader` rather than a string, and
-/// writing to a writer rather than returning a `~str`.
+/// writing to a writer rather than returning a `String`.
 ///
 /// # Arguments
 /// - `reader` - Encoded data is read from here.
@@ -475,7 +476,7 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
             Entity if c == '#' => state = Numeric,
             Entity => {
                 state = Named;
-                buf.push_char(c);
+                buf.push(c);
             }
             Named if c == ';' => {
                 state = Normal;
@@ -483,10 +484,10 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
                 do_io!(writer.write_char(ch));
                 buf.clear();
             }
-            Named => buf.push_char(c),
+            Named => buf.push(c),
             Numeric if c.is_digit() => {
                 state = Dec;
-                buf.push_char(c);
+                buf.push(c);
             }
             Numeric if c == 'x' => state = Hex,
             Dec if c == ';' => {
@@ -501,8 +502,8 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
                 do_io!(writer.write_char(ch));
                 buf.clear();
             }
-            Hex if c.is_digit_radix(16) => buf.push_char(c),
-                    Dec if c.is_digit() => buf.push_char(c),
+            Hex if c.is_digit_radix(16) => buf.push(c),
+                    Dec if c.is_digit() => buf.push(c),
                     _ => return Err(format!("at {}: parse error", pos))
         }
         pos += 1;
@@ -551,7 +552,7 @@ mod test {
 
     use htmlescape::*;
 
-    static big_str: &'static str = include_str!("../moonstone-short.txt");
+    static BIG_STR: &'static str = include_str!("../moonstone-short.txt");
 
     macro_rules! assert_typed_eq (($T: ty, $given: expr, $expected: expr) => ({
         let given_val: &$T = $given;
@@ -645,26 +646,26 @@ mod test {
 
     #[bench]
     fn bench_encode_attribute(bh: &mut test::Bencher) {
-        bh.iter(|| { encode_attribute(big_str) });
-        bh.bytes = big_str.len() as u64;
+        bh.iter(|| { encode_attribute(BIG_STR) });
+        bh.bytes = BIG_STR.len() as u64;
     }
 
     #[bench]
     fn bench_encode_minimal(bh: &mut test::Bencher) {
-        bh.iter(|| { encode_minimal(big_str) });
-        bh.bytes = big_str.len() as u64;
+        bh.iter(|| { encode_minimal(BIG_STR) });
+        bh.bytes = BIG_STR.len() as u64;
     }
 
     #[bench]
     fn bench_decode_attribute(bh: &mut test::Bencher) {
-        let encoded = encode_attribute(big_str);
+        let encoded = encode_attribute(BIG_STR);
         bh.iter(|| { decode_html(encoded.as_slice()) });
         bh.bytes = encoded.len() as u64;
     }
 
     #[bench]
     fn bench_decode_minimal(bh: &mut test::Bencher) {
-        let encoded = encode_minimal(big_str);
+        let encoded = encode_minimal(BIG_STR);
         bh.iter(|| { decode_html(encoded.as_slice()) });
         bh.bytes = encoded.len() as u64;
     }
@@ -674,7 +675,7 @@ mod test {
         let mut s = String::new();
         for _ in range(0, len) {
             let c = char::from_u32(rng.gen_range::<uint>(1, 512) as u32).unwrap();
-            s.push_char(c);
+            s.push(c);
         }
         return s;
     }
