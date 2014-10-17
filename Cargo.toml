@@ -1,6 +1,6 @@
 [package]
-name = "rust-htmlescape"
-version = "0.2.0"
+name = "htmlescape"
+version = "0.2.1"
 authors = [ "Viktor Dahl <pazaconyoman@gmail.com>" ]
 
 [lib]
