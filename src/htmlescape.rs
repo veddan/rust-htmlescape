@@ -485,7 +485,7 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
                 buf.clear();
             }
             Named => buf.push(c),
-            Numeric if c.is_digit() => {
+            Numeric if is_digit(c) => {
                 state = Dec;
                 buf.push(c);
             }
@@ -502,9 +502,9 @@ pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> R
                 do_io!(writer.write_char(ch));
                 buf.clear();
             }
-            Hex if c.is_digit_radix(16) => buf.push(c),
-                    Dec if c.is_digit() => buf.push(c),
-                    _ => return Err(format!("at {}: parse error", pos))
+            Hex if is_hex_digit(c) => buf.push(c),
+            Dec if is_digit(c) => buf.push(c),
+            _ => return Err(format!("at {}: parse error", pos))
         }
         pos += 1;
     }
@@ -542,6 +542,10 @@ pub fn decode_html(s: &str) -> Result<String, String> {
         Err(err) => Err(err)
     }
 }
+
+fn is_digit(c: char) -> bool { c >= '0' && c <= '9' }
+
+fn is_hex_digit(c: char) -> bool { is_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')  }
 
 #[cfg(test)]
 mod test {
