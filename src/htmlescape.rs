@@ -391,7 +391,7 @@ pub fn encode_attribute_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
         match get_entity(c) {
             Some(entity) => try!(writer.write(entity.as_bytes())),
             None =>
-                if b < 256 && (b > 127 || unsafe { !c.to_ascii_nocheck().is_alnum() }) {
+                if b < 256 && (b > 127 || unsafe { !c.to_ascii_nocheck().is_alphanumeric() }) {
                     try!(write_hex(c, writer))
                 } else {
                     try!(writer.write_char(c))
