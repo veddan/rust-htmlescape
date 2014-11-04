@@ -23,7 +23,7 @@ corresponding characters. Named, hex, and decimal entities are supported. A `Res
 ```rust
 let encoded = "Cats&#x20;&amp;&#32;dogs";
 let decoded = match decode_html(encoded) {
-  Err(reason) => fail!("Something went wrong: {}", reason),
+  Err(reason) => panic!("Something went wrong: {}", reason),
   Ok(s) => s
 };
 assert_eq!(decoded.as_slice(), "Cats & dogs");
