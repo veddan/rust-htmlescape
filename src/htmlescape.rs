@@ -313,7 +313,7 @@ fn get_entity(c: char) -> Option<&'static str> {
 pub fn encode_minimal(s: &str) -> String {
     let mut writer = MemWriter::with_capacity(s.len() * 4 / 3);
     match encode_minimal_w(s, &mut writer) {
-        Err(_) => fail!(),
+        Err(_) => panic!(),
         Ok(_) => String::from_utf8(writer.unwrap()).unwrap()
     }
 }
@@ -371,7 +371,7 @@ fn write_hex<W: Writer>(c: char, writer: &mut W) -> IoResult<()> {
 pub fn encode_attribute(s: &str) -> String {
     let mut writer = MemWriter::with_capacity(s.len() * 3);
     match encode_attribute_w(s, &mut writer) {
-        Err(_) => fail!(),
+        Err(_) => panic!(),
         Ok(_) => String::from_utf8(writer.unwrap()).unwrap()
     }
 }
@@ -391,7 +391,7 @@ pub fn encode_attribute_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
         match get_entity(c) {
             Some(entity) => try!(writer.write(entity.as_bytes())),
             None =>
-                if b < 256 && (b > 127 || unsafe { !c.to_ascii_nocheck().is_alnum() }) {
+                if b < 256 && (b > 127 || unsafe { !c.to_ascii_nocheck().is_alphanumeric() }) {
                     try!(write_hex(c, writer))
                 } else {
                     try!(writer.write_char(c))
@@ -610,7 +610,7 @@ mod test {
         for &(input, expected) in data.iter() {
             match decode_html(input) {
                 Ok(actual) => assert_eq!(actual.as_slice(), expected),
-                Err(reason) => fail!("Failed at \"{}\", reason \"{}\"", input, reason)
+                Err(reason) => panic!("Failed at \"{}\", reason \"{}\"", input, reason)
             }
         }
     }
@@ -630,7 +630,7 @@ mod test {
         for &input in data.iter() {
             match decode_html(input) {
                 Err(_) => (),
-                Ok(res) => fail!("Failed at \"{}\", expected error, got \"{}\"", input, res)
+                Ok(res) => panic!("Failed at \"{}\", expected error, got \"{}\"", input, res)
             }
         }
     }
@@ -642,7 +642,7 @@ mod test {
             let original = random_str(&mut rng);
             let encoded = encode_attribute(original.as_slice());
             match decode_html(encoded.as_slice()) {
-                Err(reason) => fail!("error at \"{}\", reason: {}", original, reason),
+                Err(reason) => panic!("error at \"{}\", reason: {}", original, reason),
                 Ok(decoded) => assert_eq!(original, decoded)
             };
         }
