@@ -337,13 +337,14 @@ pub fn encode_minimal_w<W: Writer>(s: &str, writer: &mut W) -> IoResult<()> {
     Ok(())
 }
 
+#[inline(never)]
 fn write_hex<W: Writer>(c: char, writer: &mut W) -> IoResult<()> {
-    let hex = "0123456789ABCDEF".as_bytes();
-    try!(writer.write("&#x".as_bytes()));
+    let hex = b"0123456789ABCDEF";
+    try!(writer.write(b"&#x"));
     let n = c as u8;
     try!(writer.write_u8(hex[((n & 0xF0) >> 4) as uint]));
     try!(writer.write_u8(hex[(n & 0x0F) as uint]));
-    try!(writer.write_char(';'));
+    try!(writer.write_u8(b';'));
     Ok(())
 }
 
@@ -462,8 +463,7 @@ macro_rules! do_io(
 pub fn decode_html_rw<R: Buffer, W: Writer>(reader: &mut R, writer: &mut W) -> Result<(), String> {
     let mut state: DecodeState = Normal;
     let mut pos = 0u;
-    let mut buf = String::new();
-    buf.reserve(8);
+    let mut buf = String::with_capacity(8);
     loop {
         let c = match reader.read_char() {
             Ok(c) => c,
