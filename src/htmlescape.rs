@@ -412,7 +412,7 @@ enum DecodeState {
 }
 
 fn decode_named_entity(entity: &str) -> Result<char, String> {
-    match NAMED_ENTITIES.binary_search(|&(ent, _)| {ent.cmp(&entity) }) {
+    match NAMED_ENTITIES.binary_search(|&(ent, _)| {ent.cmp(entity) }) {
         NotFound(..) => Err(format!("no such entity '&{};", entity)),
         Found(idx)   => {
             let (_, c) = NAMED_ENTITIES[idx];
