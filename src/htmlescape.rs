@@ -2,6 +2,7 @@ use std::io::{Writer, Buffer, MemWriter, BufReader, IoResult};
 use std::io;
 use std::{num, char};
 use std::slice::{Found, NotFound};
+use self::DecodeState::*;
 
 static NAMED_ENTITIES: &'static[(&'static str, char)] = &[
     ("AElig", '\u00C6'),
