@@ -1,7 +1,5 @@
-#![feature(globs)]
-#![feature(macro_rules)]
-
 pub use htmlescape::*;
 
+mod io_support;
 mod htmlescape;
 
