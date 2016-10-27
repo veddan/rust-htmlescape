@@ -1,9 +1,8 @@
-use std::io::{Write, BufRead, Cursor};
-use std::io;
+use std::io::{self, Write, BufRead, Cursor};
 use std::char;
 use self::DecodeState::*;
-use io_support::write_char;
-use io_support;
+use self::DecodeErrKind::*;
+use io_support::{self, write_char, CharsError};
 
 static NAMED_ENTITIES: &'static[(&'static str, char)] = &[
     ("AElig", '\u{00C6}'),
@@ -316,7 +315,7 @@ pub fn encode_minimal(s: &str) -> String {
     let mut writer = Vec::with_capacity((s.len()/3 + 1) * 4);
     match encode_minimal_w(s, &mut writer) {
         Err(_) => panic!(),
-        Ok(_) => String::from_utf8(writer).unwrap()
+        Ok(_) => String::from_utf8(writer).expect("impossible invalid UTF-8 in output")
     }
 }
 
@@ -418,9 +417,43 @@ enum DecodeState {
     Dec
 }
 
-fn decode_named_entity(entity: &str) -> Result<char, String> {
+#[derive(Debug)]
+pub enum DecodeErrKind {
+    /// A non-existent named entity was referenced.
+    /// Example: &thisentitydoesnotexist
+    UnknownEntity,
+    
+    /// A numerical escape sequence (&# or &#x) containing an invalid character.
+    /// Examples: `&#32a`, `&#xfoo`
+    MalformedNumEscape,
+    
+    /// A numerical escape sequence (&# or &#x) resolved to an invalid unicode code point.
+    /// Example: `&#xffffff`
+    InvalidCharacter,
+
+    /// The input ended prematurely (ie. inside an unterminated named entity sequence).
+    PrematureEnd,
+
+    /// Other syntax error.
+    Other,
+    
+    /// An IO error occured.
+    IoError(io::Error),
+
+    /// The supplied Reader produces invalid UTF-8.
+    EncodingError,
+}
+
+#[derive(Debug)]
+pub struct DecodeErr {
+    position: usize,
+    kind: DecodeErrKind
+}
+
+
+fn decode_named_entity(entity: &str) -> Result<char, DecodeErrKind> {
     match NAMED_ENTITIES.binary_search_by(|&(ent, _)| ent.cmp(entity)) {
-        Err(..) => Err(format!("no such entity '&{};", entity)),
+        Err(..) => Err(UnknownEntity),
         Ok(idx) => {
             let (_, c) = NAMED_ENTITIES[idx];
             Ok(c)
@@ -428,29 +461,29 @@ fn decode_named_entity(entity: &str) -> Result<char, String> {
     }
 }
 
-fn decode_numeric(esc: &str, radix: u32) -> Result<char, String> {
+fn decode_numeric(esc: &str, radix: u32) -> Result<char, DecodeErrKind> {
     match u32::from_str_radix(esc, radix) {
         Ok(n) => match char::from_u32(n) {
             Some(c) => Ok(c),
-            None => Err(format!("invalid character '{}' in \"{}\"", n, esc))
+            None => Err(InvalidCharacter)
         },
-        Err(..) => Err(format!("invalid escape \"{}\"", esc))
+        Err(..) => Err(MalformedNumEscape)
     }
 }
 
 macro_rules! try_parse(
-    ($parse:expr, $pos:ident) => (
+    ($parse:expr, $pos:expr) => (
         match $parse {
-            Err(reason) => return Err(format!("at {}: {}", $pos, reason)),
+            Err(reason) => return Err(DecodeErr{ position: $pos, kind: reason}),
             Ok(res) => res
         }
     ););
 
-macro_rules! do_io(
-    ($io:expr) => (
+macro_rules! try_dec_io(
+    ($io:expr, $pos:expr) => (
         match $io {
-            Err(e) => return Err(e.to_string()),
-            Ok(_) => ()
+            Err(e) => return Err(DecodeErr{ position: $pos, kind: IoError(e)}),
+            Ok(res) => res
         }
     ););
 
@@ -466,18 +499,24 @@ macro_rules! do_io(
 /// # Return value
 /// On success `Ok(())` is returned. On error, `Err(reason)` is returned, with `reason`
 /// containing a description of the error.
-pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result<(), String> {
+pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result<(), DecodeErr> {
     let mut state: DecodeState = Normal;
     let mut pos = 0;
     let mut buf = String::with_capacity(8);
     for c in io_support::chars(reader) {
         let c = match c {
-            Ok(c) => c,
-            Err(e) => return Err(e.to_string())
+            Err(e) => {
+                let kind = match e {
+                    CharsError::NotUtf8   => EncodingError,
+                    CharsError::Other(io) => IoError(io)
+                };
+                return Err(DecodeErr{ position: pos, kind: kind });
+            }
+            Ok(c) => c
         };
         match state {
             Normal if c == '&' => state = Entity,
-            Normal => do_io!(write_char(writer, c)),
+            Normal => try_dec_io!(write_char(writer, c), pos),
             Entity if c == '#' => state = Numeric,
             Entity => {
                 state = Named;
@@ -486,7 +525,7 @@ pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result
             Named if c == ';' => {
                 state = Normal;
                 let ch = try_parse!(decode_named_entity(&buf), pos);
-                do_io!(write_char(writer, ch));
+                try_dec_io!(write_char(writer, ch), pos);
                 buf.clear();
             }
             Named => buf.push(c),
@@ -498,23 +537,23 @@ pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result
             Dec if c == ';' => {
                 state = Normal;
                 let ch = try_parse!(decode_numeric(&buf, 10), pos);
-                do_io!(write_char(writer, ch));
+                try_dec_io!(write_char(writer, ch), pos);
                 buf.clear();
             }
             Hex if c == ';' => {
                 state = Normal;
                 let ch = try_parse!(decode_numeric(&buf, 16), pos);
-                do_io!(write_char(writer, ch));
+                try_dec_io!(write_char(writer, ch), pos);
                 buf.clear();
             }
             Hex if is_hex_digit(c) => buf.push(c),
             Dec if is_digit(c) => buf.push(c),
-            _ => return Err(format!("at {}: parse error", pos))
+            _ => return Err(DecodeErr{ position: pos, kind: Other})
         }
         pos += 1;
     }
     if state != Normal {
-        Err(format!("unfinished entity \"{}\"", buf))
+        Err(DecodeErr{ position: pos, kind: PrematureEnd})
     } else {
         Ok(())
     }
@@ -537,7 +576,7 @@ pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result
 /// The function will fail if input string contains invalid named entities (eg. `&nosuchentity;`),
 /// invalid hex entities (eg. `&#xRT;`), invalid decimal entities (eg. `&#-1;), unclosed entities
 /// (`s == "&amp hej och hå"`) or otherwise malformed entities.
-pub fn decode_html(s: &str) -> Result<String, String> {
+pub fn decode_html(s: &str) -> Result<String, DecodeErr> {
     let mut writer = Vec::with_capacity(s.len());
     let bytes = s.as_bytes();
     let mut reader = Cursor::new(bytes);

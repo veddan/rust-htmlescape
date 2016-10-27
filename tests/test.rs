@@ -60,7 +60,7 @@ fn test_decode() {
     for &(input, expected) in data.iter() {
         match decode_html(input) {
             Ok(actual) => assert_eq!(&actual, expected),
-            Err(reason) => panic!("Failed at \"{}\", reason \"{}\"", input, reason)
+            Err(reason) => panic!("Failed at \"{}\", reason \"{:?}\"", input, reason)
         }
     }
 }
@@ -92,7 +92,7 @@ fn random_roundtrip() {
         let original = random_str(&mut rng);
         let encoded = encode_attribute(&original);
         match decode_html(&encoded) {
-            Err(reason) => panic!("error at \"{}\", reason: {}", original, reason),
+            Err(reason) => panic!("error at \"{}\", reason: {:?}", original, reason),
             Ok(decoded) => assert_eq!(original, decoded)
         };
     }
