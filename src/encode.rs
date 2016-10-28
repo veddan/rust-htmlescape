@@ -46,7 +46,7 @@ pub fn encode_minimal(s: &str) -> String {
 }
 
 ///
-/// HTML entity-encode a string.
+/// HTML entity-encode a string to a writer.
 ///
 /// Similar to `encode_minimal`, except that the output is written to a writer rather
 /// than returned as a `String`.
@@ -94,7 +94,7 @@ pub fn encode_attribute(s: &str) -> String {
 }
 
 ///
-/// HTML entity-encodes a string for use in attributes values.
+/// HTML entity-encodes a string, for use in attributes values, to a writer.
 ///
 /// Similar to `encode_attribute`, except that the output is written to a writer rather
 /// than returned as a `String`.

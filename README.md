@@ -18,12 +18,13 @@ as html attribute values.
 
 ###Decoding
 `htmlescape::decode_html()` decodes an encoded string, replacing HTML entities with the
-corresponding characters. Named, hex, and decimal entities are supported. A `Result` value is returned, with either the decoded string in `Ok`, or an error message in `Err`.
+corresponding characters. Named, hex, and decimal entities are supported. A `Result` value is
+returned, with either the decoded string in `Ok`, or an error in `Err`.
 
 ```rust
 let encoded = "Cats&#x20;&amp;&#32;dogs";
 let decoded = match decode_html(encoded) {
-  Err(reason) => panic!("Something went wrong: {}", reason),
+  Err(reason) => panic!("Error {:?} at character {}", reason.kind, reason.position),
   Ok(s) => s
 };
 assert_eq!(decoded.as_slice(), "Cats & dogs");

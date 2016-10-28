@@ -5,7 +5,6 @@ use self::DecodeErrKind::*;
 use io_support::{self, write_char, CharsError};
 use entities::*;
 
-
 #[derive(Debug)]
 pub enum DecodeErrKind {
     /// A non-existent named entity was referenced.
@@ -33,10 +32,13 @@ pub enum DecodeErrKind {
     EncodingError,
 }
 
+/// Error from decoding a entity-encoded string.
 #[derive(Debug)]
 pub struct DecodeErr {
-    position: usize,
-    kind: DecodeErrKind
+    /// Character in the input at which the error occurred
+    pub position: usize,
+    /// Type of error
+    pub kind: DecodeErrKind
 }
 
 #[derive(PartialEq, Eq)]
@@ -65,18 +67,17 @@ macro_rules! try_dec_io(
         }
     ););
 
-/// Decodes an entity-encoded string.
+/// Decodes an entity-encoded string from a reader to a writer.
 ///
 /// Similar to `decode_html`, except reading from a reader rather than a string, and
 /// writing to a writer rather than returning a `String`.
 ///
 /// # Arguments
-/// - `reader` - Encoded data is read from here.
-/// - `writer` - Decoded data is written to here.
+/// - `reader` - UTF-8 encoded data is read from here.
+/// - `writer` - UTF8- decoded data is written to here.
 ///
-/// # Return value
-/// On success `Ok(())` is returned. On error, `Err(reason)` is returned, with `reason`
-/// containing a description of the error.
+/// # Errors
+/// Errors can be caused by IO errors, `reader` producing invalid UTF-8, or by syntax errors.
 pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result<(), DecodeErr> {
     let mut state: DecodeState = Normal;
     let mut pos = 0;
@@ -146,14 +147,12 @@ pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result
 /// # Arguments
 /// - `s` - Entity-encoded string to decode.
 ///
-/// # Return value
-/// On success `Ok(decoded)` is returned, with `decoded` being the decoded string.
-/// On error `Err(reason)` is returned, with `reason` containing a description of the error.
-///
 /// # Failure
 /// The function will fail if input string contains invalid named entities (eg. `&nosuchentity;`),
 /// invalid hex entities (eg. `&#xRT;`), invalid decimal entities (eg. `&#-1;), unclosed entities
 /// (`s == "&amp hej och hå"`) or otherwise malformed entities.
+///
+/// This function will never return errors with `kind` set to `IoError` or `EncodingError`.
 pub fn decode_html(s: &str) -> Result<String, DecodeErr> {
     let mut writer = Vec::with_capacity(s.len());
     let bytes = s.as_bytes();
