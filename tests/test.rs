@@ -7,12 +7,22 @@ extern crate rand;
 use std::char;
 
 use htmlescape::*;
+use htmlescape::DecodeErrKind::*;
 
 macro_rules! assert_typed_eq (($T: ty, $given: expr, $expected: expr) => ({
     let given_val: &$T = $given;
     let expected_val: &$T = $expected;
     assert_eq!(given_val, expected_val);
 }));
+
+macro_rules! test_decode_err(($name: ident, $inp: expr, $pos: expr, $kind: expr) => (
+        #[test]
+        fn $name() {
+            match decode_html($inp) {
+                Ok(s) => panic!("Expected error, got '{}'", s),
+                Err(e) => assert_eq!(DecodeErr{position: $pos, kind: $kind}, e)
+            }
+        }));
 
 #[test]
 fn test_encode_minimal() {
@@ -65,25 +75,18 @@ fn test_decode() {
     }
 }
 
-#[test]
-fn bad_decode() {
-    let data = [
-        "&thisisareallylongentityname;",
-        "&#-1;",
-        "&#x13eQ;",
-        "&quot ;",
-        "&&gt;",
-        "&;",
-        "&#;",
-        "&#x",
-        ];
-    for &input in data.iter() {
-        match decode_html(input) {
-            Err(_) => (),
-            Ok(res) => panic!("Failed at \"{}\", expected error, got \"{}\"", input, res)
-        }
-    }
-}
+test_decode_err!(overflow_num, "&#100000000000000;", 0, MalformedNumEscape);
+test_decode_err!(bad_unicode, "&#xffffffff;", 0, InvalidCharacter);
+test_decode_err!(unterminated_named, "hej &amp", 4, PrematureEnd);
+test_decode_err!(unterminated_dec, "hej &#", 4, PrematureEnd);
+test_decode_err!(unterminated_hex, "hej &#x", 4, PrematureEnd);
+test_decode_err!(dec_with_x, " &#01x1", 1, MalformedNumEscape);
+test_decode_err!(unknown_entity, "  &hopp;", 2, UnknownEntity);
+test_decode_err!(negative_dec, "   &#-1;", 3, MalformedNumEscape);
+test_decode_err!(double_amp, "&&gt;;", 0, UnknownEntity);
+test_decode_err!(empty_named, "&;", 0, UnknownEntity);
+test_decode_err!(empty_dec, "&#;", 0, MalformedNumEscape);
+test_decode_err!(empty_hex, "&#x;", 0, MalformedNumEscape);
 
 #[test]
 fn random_roundtrip() {

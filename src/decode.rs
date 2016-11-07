@@ -22,9 +22,6 @@ pub enum DecodeErrKind {
     /// The input ended prematurely (ie. inside an unterminated named entity sequence).
     PrematureEnd,
 
-    /// Other syntax error.
-    Other,
-
     /// An IO error occured.
     IoError(io::Error),
 
@@ -32,10 +29,26 @@ pub enum DecodeErrKind {
     EncodingError,
 }
 
+impl PartialEq for DecodeErrKind {
+    fn eq(&self, other: &DecodeErrKind) -> bool {
+        match (self, other) {
+            (&UnknownEntity, &UnknownEntity) => true,
+            (&MalformedNumEscape, &MalformedNumEscape) => true,
+            (&InvalidCharacter, &InvalidCharacter) => true,
+            (&PrematureEnd, &PrematureEnd) => true,
+            (&IoError(_), &IoError(_)) => true,
+            (&EncodingError, &EncodingError) => true,
+            _ => false
+        }
+    }
+}
+
+impl Eq for DecodeErrKind {}
+
 /// Error from decoding a entity-encoded string.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct DecodeErr {
-    /// Character in the input at which the error occurred
+    /// Number of characters read from the input before encountering an error
     pub position: usize,
     /// Type of error
     pub kind: DecodeErrKind
@@ -81,6 +94,7 @@ macro_rules! try_dec_io(
 pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result<(), DecodeErr> {
     let mut state: DecodeState = Normal;
     let mut pos = 0;
+    let mut good_pos = 0;
     let mut buf = String::with_capacity(8);
     for c in io_support::chars(reader) {
         let c = match c {
@@ -95,16 +109,17 @@ pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result
         };
         match state {
             Normal if c == '&' => state = Entity,
-            Normal => try_dec_io!(write_char(writer, c), pos),
+            Normal => try_dec_io!(write_char(writer, c), good_pos),
             Entity if c == '#' => state = Numeric,
+            Entity if c == ';' => return Err(DecodeErr{ position: good_pos, kind: UnknownEntity }),
             Entity => {
                 state = Named;
                 buf.push(c);
             }
             Named if c == ';' => {
                 state = Normal;
-                let ch = try_parse!(decode_named_entity(&buf), pos);
-                try_dec_io!(write_char(writer, ch), pos);
+                let ch = try_parse!(decode_named_entity(&buf), good_pos);
+                try_dec_io!(write_char(writer, ch), good_pos);
                 buf.clear();
             }
             Named => buf.push(c),
@@ -115,24 +130,27 @@ pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result
             Numeric if c == 'x' => state = Hex,
             Dec if c == ';' => {
                 state = Normal;
-                let ch = try_parse!(decode_numeric(&buf, 10), pos);
-                try_dec_io!(write_char(writer, ch), pos);
+                let ch = try_parse!(decode_numeric(&buf, 10), good_pos);
+                try_dec_io!(write_char(writer, ch), good_pos);
                 buf.clear();
             }
             Hex if c == ';' => {
                 state = Normal;
-                let ch = try_parse!(decode_numeric(&buf, 16), pos);
-                try_dec_io!(write_char(writer, ch), pos);
+                let ch = try_parse!(decode_numeric(&buf, 16), good_pos);
+                try_dec_io!(write_char(writer, ch), good_pos);
                 buf.clear();
             }
             Hex if is_hex_digit(c) => buf.push(c),
             Dec if is_digit(c) => buf.push(c),
-            _ => return Err(DecodeErr{ position: pos, kind: Other})
+            Numeric | Hex | Dec => return Err(DecodeErr{ position: good_pos, kind: MalformedNumEscape}),
         }
         pos += 1;
+        if state == Normal {
+            good_pos = pos;
+        }
     }
     if state != Normal {
-        Err(DecodeErr{ position: pos, kind: PrematureEnd})
+        Err(DecodeErr{ position: good_pos, kind: PrematureEnd})
     } else {
         Ok(())
     }
