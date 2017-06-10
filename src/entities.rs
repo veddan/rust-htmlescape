@@ -1,8 +1,7 @@
 pub static MINIMAL_ENTITIES: [(char, &'static str); 5] = [
     ('"', "&quot;"),
     ('&', "&amp;"),
-    ('\'', "&#x27;"),
-    ('\'', "&apos;"),  // Allows decoding of &apos; but should be encoded as #x27; as &apos; while it is in xml 1.0, it isn't in html 4.0.
+    ('\'', "&apos;"),
     ('<', "&lt;"),
     ('>', "&gt;")
 ];
