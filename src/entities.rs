@@ -1,11 +1,3 @@
-pub static MINIMAL_ENTITIES: [(char, &'static str); 5] = [
-    ('"', "&quot;"),
-    ('&', "&amp;"),
-    ('\'', "&#x27;"),
-    ('<', "&lt;"),
-    ('>', "&gt;")
-];
-
 pub static NAMED_ENTITIES: &'static[(&'static str, char)] = &[
     ("AElig", '\u{00C6}'),
     ("Aacute", '\u{00C1}'),

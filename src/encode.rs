@@ -1,7 +1,6 @@
 use std::io::{self, Write};
 use std::char;
 use io_support::{write_char};
-use entities::*;
 
 ///
 /// HTML entity-encode a string.
@@ -56,9 +55,13 @@ pub fn encode_minimal(s: &str) -> String {
 /// - `writer` - Output is written to here.
 pub fn encode_minimal_w<W: Write>(s: &str, writer: &mut W) -> io::Result<()> {
     for c in s.chars() {
-        match get_entity(c) {
-            None => try!(write_char(writer, c)),
-            Some(entity) => try!(writer.write_all(entity.as_bytes()))
+        match c {
+            '"' => try!(writer.write_all("&quot;".as_bytes())),
+            '&' => try!(writer.write_all("&amp;".as_bytes())),
+            '\'' =>try!(writer.write_all("&#x27;".as_bytes())),
+            '<' => try!(writer.write_all("&lt;".as_bytes())),
+            '>' => try!(writer.write_all("&gt;".as_bytes())),
+            _ => try!(write_char(writer, c)),
         }
     }
     Ok(())
@@ -71,7 +74,7 @@ pub fn encode_minimal_w<W: Write>(s: &str, writer: &mut W) -> io::Result<()> {
 /// in HTML attribute values. All entities from `encode_minimal` are used, and further, all
 /// non-alphanumeric ASCII characters are hex-encoded (`&#x__;`).
 /// See the [OWASP XSS Prevention Cheat Sheet](
-/// https://www.owasp.org/index.php/XSS_(Cross_Site_Scripting)_Prevention_Cheat_Sheet) for more
+/// https://www.owasp.org/index.php/XSS_Prevention_Cheat_Sheet) for more
 /// information on entity-encoding for attribute values.
 ///
 /// # Arguments
@@ -105,9 +108,13 @@ pub fn encode_attribute(s: &str) -> String {
 pub fn encode_attribute_w<W: Write>(s: &str, writer: &mut W) -> io::Result<()> {
     for c in s.chars() {
         let b = c as usize;
-        let res = match get_entity(c) {
-            Some(entity) => writer.write_all(entity.as_bytes()),
-            None =>
+        let res = match c {
+            '"' => writer.write_all("&quot;".as_bytes()),
+            '&' => writer.write_all("&amp;".as_bytes()),
+            '\''=> writer.write_all("&#x27;".as_bytes()),
+            '<' => writer.write_all("&lt;".as_bytes()),
+            '>' => writer.write_all("&gt;".as_bytes()),
+            _ =>
                 if b < 256 && (b > 127 || !is_ascii_alnum(c)) {
                     write_hex(writer, c)
                 } else {
@@ -117,16 +124,6 @@ pub fn encode_attribute_w<W: Write>(s: &str, writer: &mut W) -> io::Result<()> {
         try!(res);
     }
     Ok(())
-}
-
-fn get_entity(c: char) -> Option<&'static str> {
-    match MINIMAL_ENTITIES.binary_search_by(|&(ec, _)| ec.cmp(&c) ) {
-        Err(..) => None,
-        Ok(idx) => {
-            let (_, e) = MINIMAL_ENTITIES[idx];
-            Some(e)
-        }
-    }
 }
 
 fn write_hex<W: Write>(writer: &mut W, c: char) -> io::Result<()> {
