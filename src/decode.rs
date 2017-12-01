@@ -54,7 +54,7 @@ pub struct DecodeErr {
     pub kind: DecodeErrKind
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq)]
 enum DecodeState {
     Normal,
     Entity,
@@ -277,8 +277,6 @@ pub fn decode_html_rw_ignoring_errors<R: BufRead, W: Write>(reader: R, writer: &
         if state == Normal {
             good_pos = pos;
         }
-        println!("state: {:?}, pos: {}, good_pos: {}, buf_since_good_pos: {:?}", state, pos, good_pos, buf_since_good_pos);
-
     }
 
     if state != Normal {
