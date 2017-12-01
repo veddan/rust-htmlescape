@@ -75,6 +75,28 @@ fn test_decode() {
     }
 }
 
+#[test]
+fn test_decode_ignoring_errors() {
+    let data = [
+        ("", ""),
+        ("&", "&"),
+        ("&amp;&", "&&"),
+        ("&#x2013;&#", "–&#"),
+        ("&#x;", "&#x;"),
+        ("&#;", "&#;"),
+        ("&foo;", "&foo;"),
+        ("&foo", "&foo"),
+        ("&#012345678901234567890123", "&#012345678901234567890123"),
+        ];
+    for &(input, expected) in data.iter() {
+        match decode_html_ignoring_errors(input) {
+            Ok(actual) => assert_eq!(&actual, expected),
+            Err(reason) => panic!("Failed at \"{}\", reason \"{:?}\"", input, reason)
+        }
+    }
+}
+
+
 test_decode_err!(overflow_num, "&#100000000000000;", 0, MalformedNumEscape);
 test_decode_err!(bad_unicode, "&#xffffffff;", 0, InvalidCharacter);
 test_decode_err!(unterminated_named, "hej &amp", 4, PrematureEnd);
