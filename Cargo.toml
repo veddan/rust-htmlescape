@@ -1,5 +1,5 @@
 [package]
-name = "forgiving-htmlescape"
+name = "forgiving_htmlescape"
 version = "0.1.0"
 authors = [ "Viktor Dahl <pazaconyoman@gmail.com>", "Maciej Dziardziel <fiedzia@gmail.com>" ]
 license = "Apache-2.0 / MIT / MPL-2.0"
