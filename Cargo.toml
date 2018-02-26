@@ -1,10 +1,10 @@
 [package]
-name = "htmlescape"
-version = "0.3.1"
-authors = [ "Viktor Dahl <pazaconyoman@gmail.com>" ]
+name = "forgiving-htmlescape"
+version = "0.1.0"
+authors = [ "Viktor Dahl <pazaconyoman@gmail.com>", "Maciej Dziardziel <fiedzia@gmail.com>" ]
 license = "Apache-2.0 / MIT / MPL-2.0"
-repository = "https://github.com/veddan/rust-htmlescape"
-description = "A library for HTML entity encoding and decoding"
+repository = "https://github.com/Fiedzia/rust-htmlescape"
+description = "A library for HTML entity encoding and decoding, with support for leaving malformed entities intact"
 
 [lib]
 name = "htmlescape"

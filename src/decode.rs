@@ -156,6 +156,138 @@ pub fn decode_html_rw<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result
     }
 }
 
+
+/// Decodes an entity-encoded string from a reader to a writer ignoring errors.
+/// Properly written and recognised entities will be decoded,
+/// any partial or unknown ones will be left intact.
+///
+/// Similar to `decode_html`, except reading from a reader rather than a string, and
+/// writing to a writer rather than returning a `String`.
+///
+/// # Arguments
+/// - `reader` - UTF-8 encoded data is read from here.
+/// - `writer` - UTF8- decoded data is written to here.
+///
+/// # Errors
+/// Errors can be caused by IO errors, `reader` producing invalid UTF-8.
+pub fn decode_html_rw_ignoring_errors<R: BufRead, W: Write>(reader: R, writer: &mut W) -> Result<(), DecodeErr> {
+    let mut state: DecodeState = Normal;
+    let mut pos = 0;
+    let mut good_pos = 0;
+    let mut buf = String::with_capacity(8);
+    let mut buf_since_good_pos = String::with_capacity(20);
+    for c in io_support::chars(reader) {
+        let c = match c {
+            Err(e) => {
+                let kind = match e {
+                    CharsError::NotUtf8   => EncodingError,
+                    CharsError::Other(io) => IoError(io)
+                };
+                return Err(DecodeErr{ position: pos, kind: kind });
+            }
+            Ok(c) => c
+        };
+        match state {
+            Normal if c == '&' => { buf_since_good_pos.push(c); state = Entity},
+            Normal => try_dec_io!(write_char(writer, c), good_pos),
+            Entity if c == '#' => { buf_since_good_pos.push(c); state = Numeric},
+            Entity if c == ';' => {
+                buf_since_good_pos.push(c);
+                try_dec_io!(writer.write(buf_since_good_pos.as_bytes()), good_pos);
+                buf_since_good_pos.clear();
+                state = Normal
+            }
+            Entity => {
+                state = Named;
+                buf.push(c);
+                buf_since_good_pos.push(c);
+            }
+            Named if c == ';' => {
+                state = Normal;
+                match  decode_named_entity(&buf) {
+                    Ok(ch) => {
+                        try_dec_io!(write_char(writer, ch), good_pos);
+                        buf.clear();
+                        buf_since_good_pos.clear();
+                    },
+                    Err(_) => {
+                        buf_since_good_pos.push(c);
+                        try_dec_io!(writer.write(buf_since_good_pos.as_bytes()), good_pos);
+                        buf_since_good_pos.clear();
+                        buf.clear();
+                    }
+                }
+            }
+            Named => {
+                buf.push(c);
+                buf_since_good_pos.push(c);
+            },
+            Numeric if is_digit(c) => {
+                state = Dec;
+                buf.push(c);
+                buf_since_good_pos.push(c);
+            }
+            Numeric if c == 'x' => {
+                buf_since_good_pos.push(c);
+                state = Hex
+            },
+            Dec if c == ';' => {
+                state = Normal;
+                match  decode_numeric(&buf, 10) {
+                    Ok(ch) => {
+                        try_dec_io!(write_char(writer, ch), good_pos);
+                        buf.clear();
+                        buf_since_good_pos.clear();
+                    },
+                    Err(_) => {
+                        buf_since_good_pos.push(c);
+                        try_dec_io!(writer.write(buf_since_good_pos.as_bytes()), good_pos);
+                        buf_since_good_pos.clear();
+                        buf.clear();
+                    }
+                }
+            }
+            Hex if c == ';' => {
+                state = Normal;
+                match  decode_numeric(&buf, 16) {
+                    Ok(ch) => {
+                        try_dec_io!(write_char(writer, ch), good_pos);
+                        buf.clear();
+                        buf_since_good_pos.clear();
+                    },
+                    Err(_) => {
+                        buf_since_good_pos.push(c);
+                        try_dec_io!(writer.write(buf_since_good_pos.as_bytes()), good_pos);
+                        buf_since_good_pos.clear();
+                        buf.clear();
+                    }
+                }
+            }
+            Hex if is_hex_digit(c) => { buf.push(c); buf_since_good_pos.push(c) },
+            Dec if is_digit(c) => { buf.push(c); buf_since_good_pos.push(c) },
+            Numeric | Hex | Dec => {
+                buf_since_good_pos.push(c);
+                try_dec_io!(writer.write(buf_since_good_pos.as_bytes()), good_pos);
+                buf_since_good_pos.clear();
+                buf.clear();
+                state = Normal
+            }
+        }
+        pos += 1;
+        if state == Normal {
+            good_pos = pos;
+        }
+    }
+
+    if state != Normal {
+        //let slice = reader;
+        try_dec_io!(writer.write(buf_since_good_pos.as_bytes()), good_pos); 
+    }
+    
+    Ok(())
+}
+
+
 /// Decodes an entity-encoded string.
 ///
 /// Decodes an entity encoded string, replacing HTML entities (`&amp;`, `&#20;` ...) with the
@@ -176,6 +308,30 @@ pub fn decode_html(s: &str) -> Result<String, DecodeErr> {
     let bytes = s.as_bytes();
     let mut reader = Cursor::new(bytes);
     let res = decode_html_rw(&mut reader, &mut writer);
+    match res {
+        Ok(_) => Ok(String::from_utf8(writer).unwrap()),
+        Err(err) => Err(err)
+    }
+}
+
+/// Decodes an entity-encoded string.
+///
+/// Decodes an entity encoded string, replacing HTML entities (`&amp;`, `&#20;` ...) with the
+/// the corresponding character. Case matters for named entities, ie. `&Amp;` is invalid.
+/// Case does not matter for hex entities, so `&#x2E;` and `&#x2e;` are treated the same.
+///
+/// # Arguments
+/// - `s` - Entity-encoded string to decode.
+///
+/// # Failure
+/// Any invalid, unrecognised or malformed entities will be ignored and left intact.
+///
+/// This function will never return errors with `kind` set to `IoError` or `EncodingError`.
+pub fn decode_html_ignoring_errors(s: &str) -> Result<String, DecodeErr> {
+    let mut writer = Vec::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut reader = Cursor::new(bytes);
+    let res = decode_html_rw_ignoring_errors(&mut reader, &mut writer);
     match res {
         Ok(_) => Ok(String::from_utf8(writer).unwrap()),
         Err(err) => Err(err)
